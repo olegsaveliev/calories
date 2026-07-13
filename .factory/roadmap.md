@@ -9,7 +9,11 @@
 | 001 | Initial prototype | Upload a picture of food. | S | queued | — |
 
 ## GitHub Issues (mirror — see `.factory/github.md`)
-_GitHub not wired yet (local-only at setup). Once wired, each feature mirrors to an Issue here (e.g. `001 → #1`)._
+Repo: `olegsaveliev/calories` · main is **protected** (PR + green CI to merge).
+
+| Feature | Issue |
+|---------|-------|
+| 001 Initial prototype | [#1](https://github.com/olegsaveliev/calories/issues/1) |
 
 ## Parked (needs a decision first)
 _Ideas that conflict with `PROJECT.md` non-goals, or need a call before queuing._
