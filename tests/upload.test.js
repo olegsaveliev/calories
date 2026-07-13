@@ -448,16 +448,63 @@ describe("POST /upload — 002 Story 3: no misleading numbers", () => {
   });
 });
 
-describe("GET / (served frontend)", () => {
-  it("AC1.1 / AC1.3 — served HTML has file input, send control, and confirmation area", async () => {
+describe("GET / (served frontend) — 003 Midnight Lime rebuild", () => {
+  it("AC1.1/AC1.2/AC8.2 — Pick screen: keyboard-operable dropzone as the file-input target, narrowed to JPEG/PNG", async () => {
     const res = await fetch(`${base}/`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
     const html = await res.text();
+
+    expect(html).toContain('data-testid="pick-screen"');
+    expect(html).toContain('data-testid="dropzone"');
     expect(html).toContain('data-testid="file-input"');
-    expect(html).toContain('accept="image/*"');
-    expect(html).toContain('data-testid="send-button"');
-    expect(html).toContain('data-testid="status"');
+    // Narrowed from the 002 `accept="image/*"` debt (manifest) — client UX guard, AC1.4/AC8.2.
+    expect(html).toContain('accept="image/jpeg,image/png"');
+    expect(html).not.toContain('accept="image/*"');
+  });
+
+  it("AC1.1/AC8.3 — the 'Estimate calories' CTA ships disabled by default (native disabled + aria-disabled)", async () => {
+    const html = await readFile(INDEX_HTML, "utf8");
+    const ctaMatch = html.match(/<button[^>]*data-testid="estimate-cta"[^>]*>/);
+    expect(ctaMatch).not.toBeNull();
+    const ctaTag = ctaMatch[0];
+    expect(ctaTag).toContain("disabled");
+    expect(ctaTag).toContain('aria-disabled="true"');
+    expect(html).toMatch(/estimate calories/i);
+  });
+
+  it("AC3.1/AC3.4/AC4.1/AC4.2 — Result screen: hero-number container, error-state container, and reset controls all present", async () => {
+    const html = await readFile(INDEX_HTML, "utf8");
+
+    expect(html).toContain('data-testid="result-screen"');
+    expect(html).toContain('data-testid="hero-number"');
+    expect(html).toContain('data-testid="hero-value"');
+    expect(html).toContain('data-testid="error-message"');
+    expect(html).toContain('data-testid="back-button"');
+    expect(html).toContain('data-testid="new-photo-button"');
+    expect(html).toContain('data-testid="try-again-button"');
+    expect(html).toContain('data-testid="result-photo"');
+  });
+
+  it("AC3.2 — the unimplemented 007 fields (food name, ± range, items/confidence) are never hardcoded demo values", async () => {
+    const html = await readFile(INDEX_HTML, "utf8");
+
+    // The mock's demo values must never appear anywhere in the shipped markup/script.
+    expect(html).not.toMatch(/642/);
+    expect(html).not.toMatch(/grilled chicken bowl/i);
+    expect(html).not.toMatch(/3\s*items seen/i); // no hardcoded item count
+    expect(html).not.toMatch(/±\s?\d/); // no "± NN" range anywhere
+    expect(html).not.toMatch(/high confidence/i);
+    // Food-name pill is omitted entirely (30-design.md §4) — no such DOM hook exists.
+    expect(html).not.toMatch(/data-testid="food-name/i);
+    expect(html).not.toMatch(/class="food-name/i);
+
+    // The two stat tiles are present for layout fidelity but rendered as an explicit neutral "—".
+    expect(html).toContain('data-testid="stat-value-1"');
+    expect(html).toContain('data-testid="stat-value-2"');
+    const statValues = [...html.matchAll(/data-testid="stat-value-\d"[^>]*>([^<]*)</g)].map((m) => m[1].trim());
+    expect(statValues.length).toBe(2);
+    for (const v of statValues) expect(v).toBe("—");
   });
 });
 
@@ -474,14 +521,14 @@ describe("AC2.5 — no secret in client code", () => {
   });
 });
 
-describe("R10(b) — the user is told the photo leaves the machine", () => {
-  it("served index.html carries a plain-language third-party notice", async () => {
+describe("R10(b) / AC7.3 — the user is told the photo leaves the machine", () => {
+  it("served index.html carries a plain-language third-party notice (003 restyled copy, same substance)", async () => {
     const res = await fetch(`${base}/`);
     const html = await res.text();
 
     expect(html).toContain('data-testid="privacy-notice"');
     expect(html).toMatch(/sent to Anthropic/i); // names the third party
-    expect(html).toMatch(/metadata are removed/i); // says what we strip
+    expect(html).toMatch(/metadata is\s+stripped/i); // says what we do, before egress
     expect(html).toMatch(/is stored here/i); // says nothing is retained
   });
 });

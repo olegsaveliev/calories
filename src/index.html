@@ -4,91 +4,814 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Calories</title>
+
+  <!-- 003 — Midnight Lime tokens use Space Grotesk (display/numerals) + Manrope (body). A CSS/font
+       <link> is a static asset, not a runtime dependency/framework — ADR-001 unaffected (30-design.md
+       §6). System-font fallbacks below keep the UI usable if the CDN is unreachable. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
-    .controls { display: flex; gap: .5rem; align-items: center; margin: 1rem 0; flex-wrap: wrap; }
-    .notice { font-size: .875rem; color: #555; border-left: 3px solid #ccc; padding-left: .75rem; }
-    #status { margin-top: 1rem; min-height: 1.5rem; }
-    #status.ok { color: #0a7d28; }
-    #status.err { color: #b00020; }
-    button { padding: .4rem .8rem; }
+    :root {
+      /* Midnight Lime tokens — 30-design.md §2 / handoff README "Design Tokens" (AC6.1) */
+      --bg: #0A0B0D;
+      --accent: #C6FF3D;
+      --accent-hover: #D6FF6B;
+      --text: #F5F7FA;
+      --muted: #8A9099;
+      --dim: #6B7280;
+      --dim-2: #7D838C;
+      --hairline-1: rgba(255, 255, 255, .09);
+      --hairline-2: rgba(255, 255, 255, .08);
+      --hairline-3: rgba(255, 255, 255, .06);
+      --surface-1: rgba(255, 255, 255, .05);
+      --surface-2: rgba(255, 255, 255, .03);
+      --accent-tint-1: rgba(198, 255, 61, .35);
+      --accent-tint-2: rgba(198, 255, 61, .25);
+      --accent-tint-3: rgba(198, 255, 61, .12);
+      --accent-tint-4: rgba(198, 255, 61, .06);
+
+      /* Radius scale (AC6.3) */
+      --radius-dropzone: 24px;
+      --radius-photo: 22px;
+      --radius-tile: 14px;
+      --radius-cta: 16px;
+      --radius-control: 12px;
+      --radius-logo: 8px;
+      --radius-icon-tile: 20px;
+
+      --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+      --font-body: 'Manrope', system-ui, -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+    }
+
+    body {
+      min-height: 100vh;
+    }
+
+    button, input {
+      font-family: inherit;
+      color: inherit;
+    }
+
+    /* AC8.1 — every interactive control needs a visible focus indicator, never outline:none alone. */
+    a:focus-visible,
+    button:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    /* AC6.5 — responsive bounds: full-viewport real-app screens, content centered 340–420px max
+       width (the 340×720 phone card in the handoff is a prototype frame only, not shipped). */
+    .screen {
+      width: 100%;
+      max-width: 420px;
+      min-width: 300px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---------- Header (shared shape, different content per screen) ---------- */
+    .pick-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 40px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .logo-mark {
+      width: 26px;
+      height: 26px;
+      border-radius: var(--radius-logo);
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo-word {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+
+    /* AC8.4 — visible glyph stays 34x34 but the hit area is >=44x44 via padding/hitslop. */
+    .avatar-slot {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--surface-1);
+      border: 1px solid var(--hairline-2);
+    }
+
+    h1.heading {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 30px;
+      line-height: 1.12;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin: 0 0 10px;
+    }
+
+    .subtext {
+      font-family: var(--font-body);
+      font-weight: 400;
+      font-size: 14.5px;
+      line-height: 1.5;
+      color: var(--muted);
+      margin: 0 0 26px;
+    }
+
+    /* ---------- Dropzone (AC8.2 — keyboard-operable file-input target) ---------- */
+    .dropzone {
+      flex: 1;
+      min-height: 220px;
+      border: 1.5px dashed var(--accent-tint-1);
+      border-radius: var(--radius-dropzone);
+      background: linear-gradient(180deg, var(--accent-tint-4), rgba(198, 255, 61, 0));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .dropzone.drag-over {
+      border-color: var(--accent);
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .icon-tile {
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius-icon-tile);
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dropzone-title {
+      font-family: var(--font-body);
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    .dropzone-subtitle {
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--dim);
+      margin-top: 4px;
+    }
+
+    .preview-thumb {
+      width: 100%;
+      height: 100%;
+      max-height: 100%;
+      border-radius: calc(var(--radius-dropzone) - 4px);
+      object-fit: cover;
+    }
+
+    /* ---------- Privacy note ---------- */
+    .privacy-note {
+      display: flex;
+      gap: 10px;
+      margin: 18px 0 14px;
+      padding: 13px 15px;
+      border-radius: var(--radius-tile);
+      background: var(--surface-2);
+      border: 1px solid var(--hairline-3);
+    }
+
+    .privacy-note svg {
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .privacy-note p {
+      font-family: var(--font-body);
+      font-weight: 400;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--dim-2);
+      margin: 0;
+    }
+
+    /* ---------- CTAs ---------- */
+    .cta-primary {
+      width: 100%;
+      padding: 17px;
+      min-height: 44px;
+      border: none;
+      border-radius: var(--radius-cta);
+      background: var(--accent);
+      color: var(--bg);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .cta-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .cta-primary:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+
+    .cta-secondary {
+      width: 100%;
+      padding: 17px;
+      min-height: 44px;
+      border: 1px solid var(--hairline-1);
+      border-radius: var(--radius-cta);
+      background: transparent;
+      color: var(--text);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    /* ---------- Result screen ---------- */
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      border-radius: var(--radius-control);
+    }
+
+    .icon-btn .icon-btn-visual {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-control);
+      background: var(--surface-1);
+      border: 1px solid var(--hairline-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .result-label {
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .photo-thumb {
+      height: 168px;
+      border-radius: var(--radius-photo);
+      overflow: hidden;
+      position: relative;
+      background: linear-gradient(135deg, #3A2A1A, #1A1410);
+      flex-shrink: 0;
+    }
+
+    .photo-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .hero-block {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      position: relative;
+      min-height: 260px;
+    }
+
+    .ring {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .ring-inner {
+      width: 210px;
+      height: 210px;
+      border: 1.5px solid var(--accent-tint-2);
+      animation: ringPulse 3s ease-in-out infinite alternate;
+    }
+
+    .ring-outer {
+      width: 250px;
+      height: 250px;
+      border: 1px solid var(--accent-tint-3);
+    }
+
+    @keyframes ringPulse {
+      0% { opacity: .35; transform: scale(1); }
+      100% { opacity: .9; transform: scale(1.04); }
+    }
+
+    .eyebrow {
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--dim);
+      position: relative;
+    }
+
+    .hero-value {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 76px;
+      line-height: 1;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      position: relative;
+    }
+
+    .hero-caption {
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--muted);
+      position: relative;
+    }
+
+    /* Loading skeleton (AC2.1 — no numeric value shown while estimating) */
+    .hero-skeleton {
+      width: 180px;
+      height: 76px;
+      border-radius: 16px;
+      background: var(--surface-2);
+      position: relative;
+      animation: skeletonPulse 1.1s ease-in-out infinite alternate;
+    }
+
+    @keyframes skeletonPulse {
+      0% { opacity: .35; }
+      100% { opacity: .75; }
+    }
+
+    /* Error view (Story 4 — honest error state, no number, ever) */
+    .error-box {
+      position: relative;
+      max-width: 280px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .error-message {
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text);
+    }
+
+    .stat-tiles {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .stat-tile {
+      flex: 1;
+      padding: 13px;
+      border-radius: var(--radius-tile);
+      background: var(--surface-2);
+      border: 1px solid var(--hairline-3);
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--dim);
+      margin-top: 2px;
+    }
+
+    .result-actions {
+      display: flex;
+      flex-direction: column;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
-  <main id="app">
-    <h1 data-testid="title">Calories</h1>
-    <p>Pick a food photo and send it to the service.</p>
+  <div id="app">
+    <!-- ============================= PICK SCREEN ============================= -->
+    <!-- State machine: idle (no file, CTA disabled) -> selected (file chosen, CTA enabled) -->
+    <section class="screen" data-screen="pick" data-testid="pick-screen" id="screen-pick">
+      <div class="pick-header">
+        <div class="logo">
+          <div class="logo-mark" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <path d="M12 3c-2 3-5 4-5 8a5 5 0 0 0 10 0c0-4-3-5-5-8z" fill="#0A0B0D" />
+            </svg>
+          </div>
+          <span class="logo-word">Calories</span>
+        </div>
+        <div class="avatar-slot" aria-hidden="true">
+          <div class="avatar"></div>
+        </div>
+      </div>
 
-    <!-- R10(b) — plain-language notice: the photo leaves this machine. No dark patterns. -->
-    <p class="notice" data-testid="privacy-notice">
-      Your photo is sent to Anthropic's Claude model to estimate the calories. Location and camera
-      metadata are removed before it is sent, and neither the photo nor the estimate is stored here.
-    </p>
+      <h1 class="heading" data-testid="title">Snap it. Count it.</h1>
+      <p class="subtext">Pick a food photo and we'll estimate the calories.</p>
 
-    <div class="controls">
-      <!-- AC1.1 — visible file input that accepts images + a control to send it -->
-      <input type="file" accept="image/*" data-testid="file-input" />
-      <button type="button" data-testid="send-button">Send photo</button>
-    </div>
+      <!-- AC8.2 — the dropzone is a real keyboard-operable file-input target: a focusable,
+           Enter/Space-activatable control that programmatically opens the same hidden
+           <input type="file"> a click would. accept is narrowed to JPEG/PNG (AC1.4) — the
+           server's 415 allowlist (AC7.2) remains the authoritative backstop either way. -->
+      <div
+        class="dropzone"
+        id="dropzone"
+        data-testid="dropzone"
+        role="button"
+        tabindex="0"
+        aria-label="Add a photo. Drag in, or tap to choose."
+      >
+        <input
+          type="file"
+          id="file-input"
+          data-testid="file-input"
+          accept="image/jpeg,image/png"
+          class="visually-hidden"
+          tabindex="-1"
+          aria-hidden="true"
+        />
+        <div id="dropzone-empty">
+          <div class="icon-tile" aria-hidden="true">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+              <path d="M4 8h3l1.5-2h7L17 8h3v11H4V8z" stroke="#0A0B0D" stroke-width="1.8" stroke-linejoin="round" />
+              <circle cx="12" cy="13" r="3.2" stroke="#0A0B0D" stroke-width="1.8" />
+            </svg>
+          </div>
+          <div class="dropzone-title">Add a photo</div>
+          <div class="dropzone-subtitle">Drag in, or tap to choose</div>
+        </div>
+        <img id="dropzone-preview" class="preview-thumb" data-testid="preview-thumb" hidden alt="Selected photo preview" />
+      </div>
 
-    <!-- AC1.3 — visible confirmation area (rendered with textContent, never innerHTML) -->
-    <div id="status" data-testid="status" role="status" aria-live="polite"></div>
-  </main>
+      <!-- R10(b) / AC7.3 — truthful disclosure: names the third party, states metadata is
+           stripped before egress (server-side, per manifest — AC7.5), and that nothing is stored. -->
+      <div class="privacy-note" data-testid="privacy-notice">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z" stroke="#C6FF3D" stroke-width="1.6" stroke-linejoin="round" />
+        </svg>
+        <p>
+          Sent to Anthropic's Claude to estimate calories. Location &amp; camera metadata is
+          stripped before it is sent — nothing is stored here.
+        </p>
+      </div>
+
+      <!-- AC1.1/AC1.3/AC8.3 — native `disabled` until a photo is selected; exposed to AT. -->
+      <button
+        type="button"
+        class="cta-primary"
+        id="estimate-cta"
+        data-testid="estimate-cta"
+        disabled
+        aria-disabled="true"
+      >
+        Estimate calories
+      </button>
+    </section>
+
+    <!-- ============================= RESULT SCREEN ============================= -->
+    <!-- Sub-states (estimating | done | error) toggled via data-state on this section. -->
+    <section class="screen" data-screen="result" data-testid="result-screen" id="screen-result" hidden>
+      <div class="result-header">
+        <button
+          type="button"
+          class="icon-btn"
+          id="back-button"
+          data-testid="back-button"
+          aria-label="Back to pick a new photo"
+        >
+          <span class="icon-btn-visual" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M15 5l-7 7 7 7" stroke="#8A9099" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+        </button>
+        <span class="result-label">Result</span>
+      </div>
+
+      <div class="photo-thumb">
+        <img id="result-photo" data-testid="result-photo" alt="Your submitted photo" />
+      </div>
+
+      <div class="hero-block">
+        <div class="ring ring-outer" aria-hidden="true"></div>
+        <div class="ring ring-inner" aria-hidden="true"></div>
+
+        <!-- done state: eyebrow + hero number + caption. No food-name pill, no "± NN" range —
+             feature 007 fields are out of scope here (AC3.2) and are never fabricated. -->
+        <div id="hero-number" data-testid="hero-number" hidden>
+          <div class="eyebrow">Estimated</div>
+          <div class="hero-value" id="hero-value" data-testid="hero-value"></div>
+          <div class="hero-caption">calories</div>
+        </div>
+
+        <!-- estimating state: rings stay visible/pulsing, number replaced by a skeleton. -->
+        <div class="hero-skeleton" id="hero-skeleton" data-testid="hero-skeleton" hidden aria-hidden="true"></div>
+
+        <!-- error state: inline honest message, never a number (Story 4). -->
+        <div class="error-box" id="error-box" data-testid="error-message" hidden role="status" aria-live="polite">
+          <div class="error-message" id="error-text"></div>
+        </div>
+      </div>
+
+      <!-- Feature 007 stat tiles neutralised honestly per 30-design.md §4: rendered as an
+           explicit neutral "—", never a hardcoded/computed-looking demo value. -->
+      <div class="stat-tiles">
+        <div class="stat-tile" data-testid="stat-tile-1">
+          <div class="stat-value" data-testid="stat-value-1">—</div>
+          <div class="stat-label">items seen</div>
+        </div>
+        <div class="stat-tile" data-testid="stat-tile-2">
+          <div class="stat-value" data-testid="stat-value-2">—</div>
+          <div class="stat-label">confidence</div>
+        </div>
+      </div>
+
+      <div class="result-actions">
+        <button type="button" class="cta-primary" id="try-again-button" data-testid="try-again-button" hidden>
+          Try again
+        </button>
+        <button type="button" class="cta-secondary" id="new-photo-button" data-testid="new-photo-button">
+          New photo
+        </button>
+      </div>
+    </section>
+  </div>
 
   <script>
-    const fileInput = document.querySelector('[data-testid="file-input"]');
-    const sendButton = document.querySelector('[data-testid="send-button"]');
-    const status = document.querySelector('[data-testid="status"]');
+    // 003 — Midnight Lime frontend state machine: idle -> selected -> estimating -> done|error,
+    // and back to idle via "New photo" / the back chevron. Pure in-page state, one in-memory model
+    // ({ status, file, previewUrl, calories, errorReason }); no router, no history entries
+    // (30-design.md §1). ADR-002 preserved verbatim: raw file bytes as the POST /upload body, MIME
+    // in Content-Type. Model-derived/dynamic text is set via textContent only, never innerHTML
+    // (keeps the 001 XSS posture — 30-design.md §2).
+    (function () {
+      const screenPick = document.getElementById('screen-pick');
+      const screenResult = document.getElementById('screen-result');
 
-    function setStatus(text, ok) {
-      status.textContent = text;              // textContent only — no innerHTML
-      status.className = ok ? 'ok' : 'err';
-    }
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('file-input');
+      const dropzoneEmpty = document.getElementById('dropzone-empty');
+      const dropzonePreview = document.getElementById('dropzone-preview');
+      const cta = document.getElementById('estimate-cta');
 
-    sendButton.addEventListener('click', async () => {
-      const file = fileInput.files && fileInput.files[0];
-      if (!file) {
-        setStatus('Please choose an image first.', false);
-        return;
+      const backButton = document.getElementById('back-button');
+      const resultPhoto = document.getElementById('result-photo');
+      const heroNumber = document.getElementById('hero-number');
+      const heroValue = document.getElementById('hero-value');
+      const heroSkeleton = document.getElementById('hero-skeleton');
+      const errorBox = document.getElementById('error-box');
+      const errorText = document.getElementById('error-text');
+      const tryAgainButton = document.getElementById('try-again-button');
+      const newPhotoButton = document.getElementById('new-photo-button');
+
+      const SUPPORTED_TYPES = ['image/jpeg', 'image/png'];
+
+      /** @type {'idle'|'selected'|'estimating'|'done'|'error'} */
+      let state = 'idle';
+      let currentFile = null;
+      let previewUrl = null;
+      let calories = null;
+      /** @type {'no_food'|'unavailable'|null} */
+      let errorReason = null;
+
+      function isAllowedFile(file) {
+        return !!file && SUPPORTED_TYPES.includes(file.type);
       }
 
-      setStatus('Uploading…', true);
-      try {
-        // ADR-002 — send the File as the raw request body; MIME in Content-Type.
-        const res = await fetch('/upload', {
-          method: 'POST',
-          body: file,
-          headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        });
-        let data = {};
-        try { data = await res.json(); } catch { /* non-JSON body */ }
+      function errorMessageFor(reason) {
+        // AC4.1 — a distinct, honest message for "no meal found" vs. any other failure (AC4.2).
+        if (reason === 'no_food') return "Couldn't identify a meal in that photo.";
+        return "Couldn't estimate calories — try again.";
+      }
 
-        if (res.ok && data.ok && data.calorieResult) {
-          // 002: render the calorie-model outcome, never the plain 001 "file received" line.
-          const cr = data.calorieResult;
-          if (cr.status === 'estimated') {
-            // AC1.1 — happy path: a single displayed calorie number.
-            setStatus(`~${cr.calories} calories`, true);
-          } else if (cr.status === 'no_food') {
-            // AC3.1 — no recognizable meal in the photo: clear message, no number.
-            setStatus("Couldn't identify a meal in this photo.", false);
-          } else {
-            // AC1.2 — refusal/timeout/network/parse failure: clear message, no number.
-            setStatus("Couldn't estimate calories, try again.", false);
-          }
-        } else if (res.ok && data.ok) {
-          // Fallback for a success response with no calorieResult (shouldn't happen in practice).
-          setStatus(`Photo received: ${data.size} bytes, ${data.type}.`, true);
-        } else if (res.status === 415) {
-          // Story 2 / AC2.2 — unsupported/ambiguous image type, rejected before reaching the model.
-          setStatus('Unsupported file type.', false);
-        } else {
-          setStatus(`Upload rejected: ${data.error || res.status}.`, false);
+      function render() {
+        const isPick = state === 'idle' || state === 'selected';
+        screenPick.hidden = !isPick;
+        screenResult.hidden = isPick;
+
+        // --- Pick screen ---
+        const hasFile = state === 'selected';
+        cta.disabled = !hasFile;
+        cta.setAttribute('aria-disabled', String(!hasFile));
+        dropzoneEmpty.hidden = hasFile;
+        dropzonePreview.hidden = !hasFile;
+        if (hasFile && previewUrl) {
+          dropzonePreview.src = previewUrl;
         }
-      } catch {
-        setStatus('Network error — could not reach the server.', false);
+
+        // --- Result screen ---
+        if (!isPick) {
+          resultPhoto.src = previewUrl || '';
+          const loading = state === 'estimating';
+          const done = state === 'done';
+          const errored = state === 'error';
+
+          heroSkeleton.hidden = !loading;
+          heroNumber.hidden = !done;
+          errorBox.hidden = !errored;
+
+          if (done) heroValue.textContent = String(calories);
+          if (errored) errorText.textContent = errorMessageFor(errorReason);
+
+          // AC5.4 — "New photo" / back are only reachable from done/error, never mid-flight, so no
+          // in-flight request is ever silently abandoned.
+          backButton.hidden = loading;
+          newPhotoButton.hidden = loading;
+          tryAgainButton.hidden = !errored;
+        }
       }
-    });
+
+      function selectFile(file) {
+        // AC1.4 — wrong file type is rejected client-side: no preview, state stays put, nothing
+        // is sent. The server's 415 allowlist (AC7.2) remains the authoritative backstop.
+        if (!isAllowedFile(file)) return;
+        // AC1.5 — replace (not append) any existing selection.
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        currentFile = file;
+        previewUrl = URL.createObjectURL(file);
+        state = 'selected';
+        render();
+      }
+
+      function resetToIdle() {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        currentFile = null;
+        previewUrl = null;
+        calories = null;
+        errorReason = null;
+        state = 'idle';
+        fileInput.value = '';
+        render();
+      }
+
+      async function submitEstimate() {
+        // AC2.2 — guard against a second in-flight request for the same attempt.
+        if (!currentFile || state === 'estimating') return;
+        state = 'estimating';
+        render();
+
+        try {
+          // ADR-002 (unchanged) — raw file bytes as the body, MIME in Content-Type.
+          const res = await fetch('/upload', {
+            method: 'POST',
+            body: currentFile,
+            headers: { 'Content-Type': currentFile.type || 'application/octet-stream' },
+          });
+
+          let data = null;
+          try {
+            data = await res.json();
+          } catch {
+            data = null;
+          }
+
+          const cr = data && data.calorieResult;
+          if (res.ok && data && data.ok && cr && cr.status === 'estimated' && Number.isFinite(cr.calories)) {
+            calories = cr.calories;
+            state = 'done';
+          } else if (cr && cr.status === 'no_food') {
+            errorReason = 'no_food';
+            state = 'error';
+          } else {
+            // Covers "unavailable", non-2xx (incl. 415/429), unparseable body, or any other
+            // response shape that isn't a usable estimate — never a fabricated number (AC2.4).
+            errorReason = 'unavailable';
+            state = 'error';
+          }
+        } catch {
+          // Network error / timeout.
+          errorReason = 'unavailable';
+          state = 'error';
+        }
+
+        render();
+      }
+
+      // --- Dropzone: click, drag-drop, and keyboard (Enter/Space) all open the same file picker. ---
+      dropzone.addEventListener('click', () => fileInput.click());
+      dropzone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+          e.preventDefault();
+          fileInput.click();
+        }
+      });
+      dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('drag-over');
+      });
+      dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+      dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('drag-over');
+        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file) selectFile(file);
+      });
+
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (file) selectFile(file);
+      });
+
+      cta.addEventListener('click', () => {
+        if (cta.disabled) return;
+        submitEstimate();
+      });
+
+      backButton.addEventListener('click', resetToIdle);
+      newPhotoButton.addEventListener('click', resetToIdle);
+      tryAgainButton.addEventListener('click', () => submitEstimate());
+
+      render();
+    })();
   </script>
 </body>
 </html>
