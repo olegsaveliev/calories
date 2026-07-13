@@ -8,10 +8,11 @@
 |-----|---------|-----------|------|--------|-----------|
 | 001 | Initial prototype | Upload a picture of food. | S | delivered | — |
 | 002 | Calorie estimate | Send the uploaded photo to a vision model and show an estimated calorie count. | M | delivered | 001 |
-| 003 | Food ID + confidence | Name the detected dish and show a low/med/high confidence badge next to the estimate. | S | queued | 002 |
+| 003 | Redesign | Full UI rebuild — a new layout & visual design for the upload + estimate experience (design assets to be supplied). | M | queued | 002 |
 | 004 | Portion adjuster | Scale the calorie estimate by portion (½× / 1× / 2× or a slider) — recomputed in the browser. | S | queued | 002 |
 | 005 | Camera & drag-drop | Snap a photo from the device camera or drag-and-drop an image onto the page to upload. | S | queued | 001 |
 | 006 | Shareable calorie card | Render a downloadable result card (the photo + its calorie estimate) to save or share. | M | queued | 002 |
+| 007 | Food ID + confidence | Name the detected dish and show a low/med/high confidence badge next to the estimate. | S | queued | 002 |
 
 ## GitHub Issues (mirror — see `.factory/github.md`)
 Repo: `olegsaveliev/calories` · main is **protected** (PR + green CI to merge).
