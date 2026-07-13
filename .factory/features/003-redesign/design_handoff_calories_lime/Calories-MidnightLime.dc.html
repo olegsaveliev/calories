@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  a { color: #C6FF3D; }
+  a:hover { color: #d6ff6b; }
+  @keyframes ringPulse { 0%,100% { opacity: .35; transform: scale(1); } 50% { opacity: .9; transform: scale(1.04); } }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #101215; padding: 56px; font-family: 'Manrope', sans-serif; display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; justify-content: center;">
+
+  <!-- pick screen -->
+  <div style="width: 340px; height: 720px; background: #0a0b0d; border: 1px solid rgba(255,255,255,.09); border-radius: 40px; padding: 22px; display: flex; flex-direction: column; overflow: hidden; position: relative;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px;">
+      <div style="display: flex; align-items: center; gap: 9px;">
+        <div style="width: 26px; height: 26px; border-radius: 8px; background: #c6ff3d; display: flex; align-items: center; justify-content: center;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3c-2 3-5 4-5 8a5 5 0 0 0 10 0c0-4-3-5-5-8z" fill="#0a0b0d"/></svg>
+        </div>
+        <span style="font-family: 'Space Grotesk', sans-serif; color: #f5f7fa; font-weight: 700; font-size: 16px; letter-spacing: -0.01em;">Calories</span>
+      </div>
+      <div style="width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);"></div>
+    </div>
+
+    <h2 style="font-family: 'Space Grotesk', sans-serif; color: #f5f7fa; font-size: 30px; line-height: 1.12; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 10px;">Snap it. Count it.</h2>
+    <p style="color: #8a9099; font-size: 14.5px; line-height: 1.5; margin: 0 0 26px;">Pick a food photo and we'll estimate the calories.</p>
+
+    <div style="flex: 1; border: 1.5px dashed rgba(198,255,61,.35); border-radius: 24px; background: linear-gradient(180deg, rgba(198,255,61,.06), rgba(198,255,61,0)); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center;">
+      <div style="width: 64px; height: 64px; border-radius: 20px; background: #c6ff3d; display: flex; align-items: center; justify-content: center;">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 8h3l1.5-2h7L17 8h3v11H4V8z" stroke="#0a0b0d" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="#0a0b0d" stroke-width="1.8"/></svg>
+      </div>
+      <div>
+        <div style="color: #f5f7fa; font-weight: 700; font-size: 16px;">Add a photo</div>
+        <div style="color: #6b7280; font-size: 13px; margin-top: 4px;">Drag in, or tap to choose</div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin: 18px 0 14px; padding: 13px 15px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex-shrink:0; margin-top:1px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z" stroke="#c6ff3d" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <p style="color: #7d838c; font-size: 11.5px; line-height: 1.5; margin: 0;">Sent to Claude to estimate. Location &amp; camera metadata stripped first — nothing is stored here.</p>
+    </div>
+
+    <button style="width: 100%; padding: 17px; border: none; border-radius: 16px; background: #c6ff3d; color: #0a0b0d; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; cursor: pointer;">Estimate calories</button>
+  </div>
+
+  <!-- result screen -->
+  <div style="width: 340px; height: 720px; background: #0a0b0d; border: 1px solid rgba(255,255,255,.09); border-radius: 40px; padding: 22px; display: flex; flex-direction: column; overflow: hidden;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 22px;">
+      <div style="width: 34px; height: 34px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="#8a9099" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <span style="color: #8a9099; font-size: 14px; font-weight: 600;">Result</span>
+    </div>
+
+    <div style="height: 168px; border-radius: 22px; overflow: hidden; position: relative; background: linear-gradient(135deg, #3a2a1a, #1a1410);">
+      <div style="position:absolute; inset:0; background: radial-gradient(circle at 30% 30%, rgba(255,180,90,.35), transparent 60%);"></div>
+      <div style="position:absolute; bottom:12px; left:14px; padding: 5px 11px; border-radius: 20px; background: rgba(10,11,13,.7); backdrop-filter: blur(8px); color:#f5f7fa; font-size:12px; font-weight:600;">🥗 Grilled chicken bowl</div>
+    </div>
+
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative;">
+      <div style="position:absolute; width:210px; height:210px; border-radius:50%; border:1.5px solid rgba(198,255,61,.25); animation: ringPulse 3s ease-in-out infinite;"></div>
+      <div style="position:absolute; width:250px; height:250px; border-radius:50%; border:1px solid rgba(198,255,61,.12);"></div>
+      <div style="color:#6b7280; font-size:12px; letter-spacing:.14em; text-transform:uppercase; font-weight:600;">Estimated</div>
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 76px; font-weight: 700; color: #c6ff3d; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums;">642</div>
+      <div style="color:#8a9099; font-size:14px; font-weight:600;">calories · ± 70</div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-bottom: 14px;">
+      <div style="flex:1; padding: 13px; border-radius:14px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); text-align:center;">
+        <div style="color:#f5f7fa; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px;">3</div>
+        <div style="color:#6b7280; font-size:11px; margin-top:2px;">items seen</div>
+      </div>
+      <div style="flex:1; padding: 13px; border-radius:14px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); text-align:center;">
+        <div style="color:#f5f7fa; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px;">High</div>
+        <div style="color:#6b7280; font-size:11px; margin-top:2px;">confidence</div>
+      </div>
+    </div>
+
+    <button style="width: 100%; padding: 17px; border: 1px solid rgba(255,255,255,.14); border-radius: 16px; background: transparent; color: #f5f7fa; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; cursor: pointer;">New photo</button>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
