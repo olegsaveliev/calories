@@ -4,10 +4,7 @@
 > Skills are unchanged — they just do two extra git/issue steps at the points below.
 > **Fresh template — `/setup` wires your repo. Remote + branch are recorded in `project-config.yaml`.**
 
-Remote: _not wired (local-only chosen at setup)_ · default branch: `main`.
-An `origin` exists locally (`https://github.com/olegsaveliev/aifactory.git`) but the factory is **not**
-mirroring to Issues/PRs yet. To wire it later, re-run `/setup` (or set `github.enable: true` in
-`project-config.yaml`) — until then, runs proceed `.factory`-only.
+Remote: `https://github.com/olegsaveliev/calories.git` · default branch: `main` (**protected** — merge via PR + green CI).
 
 ## The mapping
 - **Roadmap feature ↔ GitHub Issue.** One issue per feature ID (e.g. `001` → issue #1).

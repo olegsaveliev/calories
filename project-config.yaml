@@ -8,10 +8,10 @@ stack:
   preset: "node"
   notes: "Node serves the frontend and hosts the API route that calls the vision model (an API key can't live safely in client-only code). ESLint + Vitest."
 github:
-  enable: false          # chose local-only at setup; wire later
-  remote: ""             # existing origin present locally: https://github.com/olegsaveliev/aifactory.git
+  enable: true
+  remote: "https://github.com/olegsaveliev/calories.git"
   default_branch: "main"
-  protect_branch: false
+  protect_branch: true
 first_features:
   - id: "001"
     name: "Initial prototype"
