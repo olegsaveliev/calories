@@ -3,15 +3,17 @@
 This is the *what & why* behind onboarding. The **`/setup`** command executes it; **`./setup.sh`** does the
 mechanical bits. You only need one of the two paths below.
 
-## Fastest path (no questions) — config file
-1. Edit **`project-config.yaml`** (name, slug, one-liner, non-goals, stack preset, first features, GitHub).
-2. Run **`./setup.sh <slug>`** — git init, placeholder replacement, install dev tooling.
-3. Open Claude Code, run **`/setup`** — it reads your config and finishes: writes `PROJECT.md`, applies the
-   stack preset, seeds the roadmap, and (if enabled) wires GitHub. No interview needed.
-4. Start building: **`/factory-run 001`**.
+## Fastest path — `./setup.sh` asks you
+1. Run **`./setup.sh`**. It:
+   - **asks you** the questions (name, slug, one-liner, non-goals, stack preset, first feature, GitHub) and writes `project-config.yaml`,
+   - **auto-installs prerequisites** (git / node / python / gh via brew/apt/dnf),
+   - does `git init` + placeholder replacement + installs dev tooling.
+2. Open Claude Code, run **`/setup`** — reads your answers and finishes: writes `PROJECT.md`, applies the
+   stack preset, seeds the roadmap, and (if enabled) wires GitHub.
+3. Start building: **`/factory-run 001`**.
 
-## Guided path — let it interview you
-Skip the config. Just run **`/setup`** in Claude Code; it asks ~5 questions and scaffolds everything.
+## Already know the config?
+Pre-fill `project-config.yaml`, then run **`./setup.sh --yes`** to skip the questions.
 
 ## What onboarding produces (either path)
 | Step | Result |

@@ -14,23 +14,26 @@ across features, and an enforced **git / CI / Issues** flow. Point it at *any* p
 Everything else — `git`, `node`/`python` (per your stack), and `gh` — is **auto-checked and installed by `./setup.sh`**,
 so you don't check anything by hand. (Claude Code and the package manager are the only two it can't install for you.)
 
-### The 2-minute path (no questions)
-1. **Fill `project-config.yaml`** — name, one-liner, non-goals, stack (`web-vanilla` / `node` / `python`), first features, GitHub.
-2. **Run the mechanical setup:**
+### The 2-minute path
+1. **Run setup — it asks you a few questions and installs everything:**
    ```
-   ./setup.sh my-project
+   ./setup.sh
    ```
-3. **In Claude Code, finish onboarding:**
+   It interviews you (name, slug, stack, first feature, GitHub), **auto-installs prerequisites**
+   (git / node / python / gh via brew/apt/dnf), writes `project-config.yaml`, and does `git init` +
+   placeholder replacement. No file to hand-edit.
+2. **In Claude Code, finish onboarding:**
    ```
    /setup
    ```
-   It reads your config → writes `PROJECT.md`, applies your stack, seeds the roadmap, and (if enabled) wires GitHub.
-4. **Build your first feature:**
+   It reads your answers → writes `PROJECT.md`, applies your stack preset, seeds the roadmap, and (if enabled) wires GitHub.
+3. **Build your first feature:**
    ```
    /factory-run 001
    ```
 
-Prefer to be asked instead of filling a file? Just run `/setup` — it interviews you. Full detail in **[SETUP.md](SETUP.md)**.
+Already know the config? Pre-fill `project-config.yaml` and run `./setup.sh --yes` to skip the questions.
+Full detail in **[SETUP.md](SETUP.md)**.
 
 ---
 
