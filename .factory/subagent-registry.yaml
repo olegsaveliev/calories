@@ -1,0 +1,79 @@
+version: 1
+# this project factory — each pipeline step runs as an ISOLATED subagent (so its token usage is metered),
+# following its skill recipe. The recipe's single source of truth is .claude/skills/<step>/SKILL.md;
+# subagents READ it rather than duplicating it (DRY). Same recipe runs inline (/skill) or isolated (factory).
+
+feature_source: roadmap.md            # pick a queued row by ID, e.g. "run 004"
+run_dir: .factory/features/<id>/      # each subagent reads prior outputs here + the project manifest
+
+order:        [kickoff, prod-ba, architecture, ux-design, engineering, reviewer, qa, threat-model, delivery-pm]
+conditional:  [architecture, ux-design, threat-model]   # run only when the feature needs them
+out_of_band:  [bugfix]                # not in the linear order — triggered by a reported bug
+
+# GIT/CI FLOW is part of the run (playbook: .factory/github.md). The ORCHESTRATOR runs these git steps
+# (never the isolated subagents — they stay scoped to their skill + .factory output). See each step's
+# `git:` field below. main is protected (ADR-008): all work lands via a branch + green PR.
+git_preflight:
+  check: "git repo present AND `gh` authenticated (git rev-parse --is-inside-work-tree; gh auth status)"
+  if_available: "run the full github.md flow (branch · commit · push · PR · CI-green · merge · close Issue)"
+  if_unavailable: "PROMPT the human; on approval run .factory-only with git stages SKIPPED (record in run-record). .factory/ is source of truth, so this is still a valid run."
+
+steps:
+  - id: kickoff
+    skill: .claude/skills/kickoff/SKILL.md
+    reads:  [roadmap.md, manifest.md, PROJECT.md]
+    writes: [features/<id>/00-feature.md]
+    note:   also flips the picked roadmap row -> in progress
+    git:    ensure Issue exists + label `in-progress`; cut branch `feature/<id>-<slug>` from main (orchestrator)
+
+  - id: prod-ba
+    skill: .claude/skills/prod-ba/SKILL.md
+    reads:  [manifest.md, features/<id>/00-feature.md]
+    writes: [features/<id>/20-stories-acs.md, features/<id>/20-prd.md]
+
+  - id: architecture
+    when:  a structural/hard-to-reverse choice, a real fork, or AI in scope
+    skill: .claude/skills/architecture/SKILL.md
+    reads:  [manifest.md, decisions/, features/<id>/20-stories-acs.md, features/<id>/20-prd.md]
+    writes: [features/<id>/30-design.md, "features/<id>/30-options.md (if a real fork)", "decisions/00X-*.md (if ADR bar met)"]
+
+  - id: ux-design
+    when:  look-&-feel or UX feature
+    skill: .claude/skills/ux-design/SKILL.md
+    reads:  [manifest.md, decisions/, src/index.html, features/<id>/20-stories-acs.md]
+    writes: [src/index.html, features/<id>/40-design-changes.md]
+
+  - id: engineering
+    skill: .claude/skills/engineering/SKILL.md
+    reads:  [manifest.md, features/<id>/20-stories-acs.md, "features/<id>/30-design.md (if any)", "features/<id>/40-design-changes.md (if any)"]
+    writes: [src/*, features/<id>/50-build-notes.md]
+    note:   if the code will call Claude/Anthropic, load the claude-api reference FIRST; add the feature's test(s) to tests/regression.spec.js
+    git:    commit code + new test(s) to the branch and push (push auto-triggers CI) (orchestrator)
+
+  - id: reviewer
+    isolation: REQUIRED            # fresh subagent, Tier A — never the builder; this is the bias-free requirement
+    skill: .claude/skills/reviewer/SKILL.md
+    reads:  [features/<id>/20-stories-acs.md, "src/ (the changed code)", decisions/, manifest.md]
+    writes: [features/<id>/55-review.md]
+    git:    open a PR (`gh pr create`) so the reviewer reads the diff; qa gate requires CI GREEN before merge (orchestrator)
+
+  - id: qa
+    skill: .claude/skills/qa/SKILL.md
+    reads:  [features/<id>/20-stories-acs.md, features/<id>/50-build-notes.md]
+    writes: [features/<id>/60-test-cases.md]
+
+  - id: threat-model
+    when:  attack surface changes (storage/network/sensitive data) or AI in scope
+    skill: .claude/skills/threat-model/SKILL.md
+    reads:  [manifest.md, features/<id>/20-stories-acs.md, features/<id>/30-design.md]
+    writes: [features/<id>/70-threats.md]
+
+  - id: delivery-pm
+    skill: .claude/skills/delivery-pm/SKILL.md
+    reads:  [features/<id>/, manifest.md, build-log.md, dev-cost.md]
+    writes: [features/<id>/99-status.md, "manifest.md (update)", "build-log.md (append)", "dev-cost.md (append per-step tokens)"]
+    git:    commit doc updates on the branch; ensure CI green; `gh pr merge --squash --delete-branch`; close the Issue with the delivered SHA (orchestrator)
+
+telemetry:
+  per_step: token usage captured from each subagent's completion -> a row in dev-cost.md
+  per_run:  .factory/runs/<id>-run-record.md  (from runs/RUN-RECORD-TEMPLATE.md)

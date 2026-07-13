@@ -1,0 +1,10 @@
+.DS_Store
+*.log
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+.playwright/
+
+# Claude Code personal (per-user) settings — never ship these
+.claude/settings.local.json
