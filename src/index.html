@@ -23,9 +23,19 @@
       --accent-hover: #D6FF6B;
       --text: #F5F7FA;
       --muted: #8A9099;
-      --dim: #6B7280;
+      /* --dim nudged from the handoff's literal #6B7280 (30-design.md/AC8.5 flagged this for
+         verification+remediation here). Measured: #6B7280 on --bg = 4.07:1 and 3.87:1 on the
+         surface-2 stat-tile fill — both fail WCAG AA (4.5:1) for the small/normal-weight text that
+         uses this token (dropzone subtitle 13px, eyebrow 12px, stat label 11px). #7A808D restores
+         4.97:1 / 4.72:1 — passes with margin, same cool-slate family, still visibly distinct from
+         --dim-2. See 40-design-changes.md for the full before/after table. */
+      --dim: #7A808D;
       --dim-2: #7D838C;
-      --hairline-1: rgba(255, 255, 255, .09);
+      /* --hairline-1 corrected to match the handoff's Secondary CTA border spec exactly
+         (`border: 1px rgba(255,255,255,.14)` — README "Screen 1" §6 / "Screen 2" §5); the previous
+         .09 value was the (unshipped) phone-card frame's border, not the CTA's — see
+         40-design-changes.md. */
+      --hairline-1: rgba(255, 255, 255, .14);
       --hairline-2: rgba(255, 255, 255, .08);
       --hairline-3: rgba(255, 255, 255, .06);
       --surface-1: rgba(255, 255, 255, .05);
@@ -473,6 +483,17 @@
 
     [hidden] {
       display: none !important;
+    }
+
+    /* Accessibility bar (ux-design pass) — honour prefers-reduced-motion: the ring pulse and
+       loading skeleton are decorative/indeterminate-progress animations, not carriers of
+       information (state changes are also reflected in DOM/hidden attributes + text), so they are
+       safe to freeze without any loss of function for users who've asked for reduced motion. */
+    @media (prefers-reduced-motion: reduce) {
+      .ring-inner,
+      .hero-skeleton {
+        animation: none;
+      }
     }
   </style>
 </head>
