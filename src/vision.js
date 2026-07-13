@@ -7,6 +7,8 @@
 // non-2xx, unparseable/non-integer reply) collapses to the SAME fail-closed `"unavailable"` result —
 // the caller never receives a fabricated, default, or placeholder calorie value.
 
+import { STRIPPABLE_MIME_TYPES, stripImageMetadata } from "./strip-metadata.js";
+
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 
@@ -18,17 +20,30 @@ const MAX_TOKENS = 256; // single small extraction, not a conversation
 const REQUEST_TIMEOUT_MS = 30_000; // AI Eval Card latency ceiling (30-design.md decision 4)
 
 /**
- * Raster MIME types the vision API accepts. Anything else on `image/*` — including
- * `image/svg+xml` and other non-raster/degenerate subtypes — must be rejected with 415 by the
+ * Threat-model fix R15 — plausibility band on the model's integer.
+ *
+ * Type/sign validation alone accepts `999999999`, which would render as "~999999999 calories" — the
+ * visible tail of prompt-injection risk R11, and a credibility hole. A single human meal plausibly
+ * spans ~1–5000 kcal (5000 is well above any realistic single plate, so a true estimate is never
+ * clipped; anything beyond it is garbage or an injected absurdity, not a meal).
+ *
+ * A number outside the band FAILS CLOSED through the existing "couldn't estimate" path. We do NOT
+ * clamp it to the boundary: rewriting the model's answer into a plausible-looking one would be
+ * fabricating a number, which is exactly what the AI Eval Card forbids.
+ */
+export const MIN_PLAUSIBLE_CALORIES = 1;
+export const MAX_PLAUSIBLE_CALORIES = 5000;
+
+/**
+ * MIME types allowed to reach the vision model.
+ *
+ * This is now exactly the set we can provably strip metadata from (R10) — see `strip-metadata.js`
+ * for why `image/gif` and `image/webp` were dropped from the design's original allowlist. Anything
+ * else, including `image/svg+xml` and degenerate `image/` subtypes, is rejected with 415 by the
  * caller BEFORE this module is ever invoked (Story 2 / AC2.1–AC2.2; manifest R3/M1/M2).
  * @type {ReadonlyArray<string>}
  */
-export const SUPPORTED_RASTER_MIME_TYPES = Object.freeze([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-]);
+export const SUPPORTED_RASTER_MIME_TYPES = STRIPPABLE_MIME_TYPES;
 
 /**
  * Is this normalised (lowercased, no `;` params) Content-Type on the supported raster allowlist?
@@ -88,6 +103,14 @@ export async function estimateCalories(imageBuffer, mime) {
     return UNAVAILABLE;
   }
 
+  // R10(a) — LAST CHOKE POINT BEFORE EGRESS. The photo is about to cross TB-3 to a third party;
+  // strip EXIF/GPS/timestamp/comment metadata first. A buffer we cannot provably strip fails closed
+  // here and is NEVER sent unstripped. Everything downstream uses `safeBuffer`, not `imageBuffer`.
+  const safeBuffer = stripImageMetadata(imageBuffer, mime);
+  if (!safeBuffer) {
+    return UNAVAILABLE;
+  }
+
   const controller = new globalThis.AbortController();
   const timer = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -114,7 +137,7 @@ export async function estimateCalories(imageBuffer, mime) {
             content: [
               {
                 type: "image",
-                source: { type: "base64", media_type: mime, data: imageBuffer.toString("base64") },
+                source: { type: "base64", media_type: mime, data: safeBuffer.toString("base64") },
               },
               { type: "text", text: PROMPT_TEXT },
             ],
@@ -150,6 +173,13 @@ export async function estimateCalories(imageBuffer, mime) {
 
     // Treat the model's number as untrusted until it's proven to be a sane non-negative integer.
     if (!Number.isInteger(parsed.calories) || parsed.calories < 0) {
+      return UNAVAILABLE;
+    }
+
+    // R15 — plausibility band. An absurd-but-well-typed value (hallucinated, or injected via text in
+    // the pixels) fails closed rather than rendering as a number. NOT clamped to the boundary: we
+    // never rewrite the model's answer into a plausible-looking one.
+    if (parsed.calories < MIN_PLAUSIBLE_CALORIES || parsed.calories > MAX_PLAUSIBLE_CALORIES) {
       return UNAVAILABLE;
     }
 

@@ -7,6 +7,7 @@
   <style>
     body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
     .controls { display: flex; gap: .5rem; align-items: center; margin: 1rem 0; flex-wrap: wrap; }
+    .notice { font-size: .875rem; color: #555; border-left: 3px solid #ccc; padding-left: .75rem; }
     #status { margin-top: 1rem; min-height: 1.5rem; }
     #status.ok { color: #0a7d28; }
     #status.err { color: #b00020; }
@@ -17,6 +18,12 @@
   <main id="app">
     <h1 data-testid="title">Calories</h1>
     <p>Pick a food photo and send it to the service.</p>
+
+    <!-- R10(b) — plain-language notice: the photo leaves this machine. No dark patterns. -->
+    <p class="notice" data-testid="privacy-notice">
+      Your photo is sent to Anthropic's Claude model to estimate the calories. Location and camera
+      metadata are removed before it is sent, and neither the photo nor the estimate is stored here.
+    </p>
 
     <div class="controls">
       <!-- AC1.1 — visible file input that accepts images + a control to send it -->

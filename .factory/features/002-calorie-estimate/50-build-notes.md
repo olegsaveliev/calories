@@ -122,3 +122,95 @@ the model ID, structured-output schema, and request shape are accepted by the re
   outbound body carries `thinking: { type: "disabled" }`. Re-verified live against the real API
   (2xx + parsed structured reply). Lint + all 37 tests green. Minors m2/m3 were accepted & logged,
   not fixed (per disposition).
+
+## Threat-model fixes (R9 / R10 / R12 / R15)
+
+The threat-model HITL gate blocked the merge on four findings. All four are fixed; no new runtime
+dependency, no framework, key still env-only (ADR-001 intact).
+
+### R9 — unbounded model spend (High) → `src/rate-limit.js` (new)
+`POST /upload` is unauthenticated and every accepted request spends real money. Added a plain,
+in-process, dependency-free guard with two caps, both checked **before** the API call:
+- **Per-IP fixed window** — `RATE_LIMIT_MAX_PER_WINDOW = 10` calls per `RATE_LIMIT_WINDOW_MS = 60_000`
+  per client IP (`req.socket.remoteAddress`).
+- **Global in-flight concurrency** — `MAX_CONCURRENT_VISION_CALLS = 2` across all clients. This also
+  bounds the R1 memory problem (at most 2 requests can pin their ~3× base64 footprint at once).
+
+Exceeding either returns **`429 { error }`** with no `calorieResult` — a refusal, never a fabricated
+number. `acquireVisionSlot()` returns a `release()` that `server.js` calls in a `finally`, so a throw
+cannot leak a slot; `release()` is idempotent. All three limits are exported as named constants and
+`resetRateLimits()` is exported so tests can drive them. State is per-process (correct for the
+single-process localhost service; it would not coordinate across replicas — the manifest's
+"resolve before exposure beyond localhost" gate still stands).
+
+### R10 — meal photos with EXIF/GPS leave the box, silently (High) → `src/strip-metadata.js` (new) + `src/index.html`
+**(a) Strip before egress.** New module walks the container structurally and drops the
+metadata-bearing segments, leaving compressed pixel data byte-for-byte untouched (no re-encode, so
+fidelity is exactly preserved):
+- **JPEG** — drops **all** APPn segments (`0xFFE0`–`0xFFEF`, incl. **APP1 = EXIF/GPS**) and COM
+  comments; keeps DQT/SOF/DHT/etc. and copies the scan data through verbatim.
+- **PNG** — keeps critical chunks (detected via the case bit, so unknown critical chunks survive) plus
+  an explicit ancillary **keep**-list (`tRNS gAMA cHRM sRGB iCCP sBIT bKGD pHYs acTL fcTL fdAT`), and
+  drops everything else — so `eXIf`/`tEXt`/`zTXt`/`iTXt`/`tIME` **and any unknown ancillary chunk**
+  cannot smuggle data out. Chunk bytes are unmodified, so the original CRCs stay valid.
+
+Called inside `estimateCalories()` immediately before base64 — the last choke point before TB-3 — and
+the result (`safeBuffer`), never the original buffer, is what gets sent. An image that cannot be
+provably stripped returns `null` → **fail-closed, never sent unstripped**.
+
+> **Allowlist narrowed as a direct consequence (deliberate, per the disposition's "a format that
+> can't be safely stripped is a fail-closed reject, not a silent pass-through"):**
+> `SUPPORTED_RASTER_MIME_TYPES` is now **`image/jpeg` + `image/png`** only. **`image/gif` and
+> `image/webp` are now rejected with 415.** Stripping them dependency-free would mean walking GIF's
+> LZW-interleaved blocks and rewriting WebP's RIFF/VP8X chunk flags — enough parsing surface to risk
+> corrupting the pixels. JPEG/PNG cover the real product path (camera photos, screenshots), and
+> EXIF/GPS — the thing R10 is about — is overwhelmingly a JPEG concern. **This is a user-visible
+> narrowing of the design's original 4-type allowlist and should be reflected in the manifest.**
+
+**(b) Tell the user.** `src/index.html` now carries a plain one-line notice (`data-testid="privacy-notice"`),
+no dark patterns: the photo is sent to Anthropic's Claude model to estimate the calories, location and
+camera metadata are removed before it is sent, and neither the photo nor the estimate is stored.
+
+### R12 — `.gitignore` had no `.env` pattern → `.gitignore`
+Added `.env`, `.env.*`, with a `!.env.example` negation. The obvious place a developer would put
+`ANTHROPIC_API_KEY` is now structurally un-committable. No key or secret is in any file.
+
+### R15 — no plausibility bound on the model's integer → `src/vision.js`
+Added `MIN_PLAUSIBLE_CALORIES = 1` / `MAX_PLAUSIBLE_CALORIES = 5000` (a single meal; 5000 sits well
+above any realistic plate, so a genuine estimate is never clipped). A value outside the band **fails
+closed through the existing "couldn't estimate" path**. It is deliberately **not clamped** to the
+boundary — rewriting the model's answer into a plausible-looking number would be fabricating one,
+which the AI Eval Card forbids. So `999999999` now yields "couldn't estimate", not "~999999999 calories".
+
+### Tests
+`npm run lint` clean; `npm test` **70/70 green** (was 37). New/changed:
+- `tests/rate-limit.test.js` (new) — per-IP cap, per-IP isolation, window rollover, concurrency cap,
+  idempotent release.
+- `tests/strip-metadata.test.js` (new) — asserts the GPS needle is **gone from the stripped bytes**,
+  that APPn/COM and eXIf/tEXt/tIME are removed, that DQT/tRNS/pixel data **survive byte-for-byte**, and
+  that malformed/truncated/unstrippable input fails closed (returns `null`).
+- `tests/image-fixtures.js` (new) — structurally valid JPEG (with APP1/EXIF + COM) and PNG (with
+  eXIf/tEXt/tIME) fixtures carrying a `SECRET_GPS_MARKER` needle, so the strip tests prove removal on
+  real bytes rather than just that a function ran.
+- `tests/vision.test.js` — now uses the real fixtures; adds R10 egress assertions (the **base64 actually
+  POSTed** contains no GPS needle; an unstrippable image is never sent and spends nothing) and the full
+  R15 band matrix (absurd value, zero, both edges accepted, one-over rejected).
+- `tests/upload.test.js` — adds the R9 429 paths (budget exhaustion spends no extra call; concurrency
+  overflow is refused not queued; a 429 carries no number), the R10 end-to-end egress-strip assertion,
+  gif/webp now 415, the R15 HTTP path, and a check for the privacy notice.
+- The AC2.5 secret scan previously forbade the literal string `/anthropic/i` in `index.html`. R10(b)
+  **requires** naming the third party, so that assertion was replaced with checks for an actual
+  key/secret (`sk-…`, `api[_-]?key`, `ANTHROPIC_API_KEY`). The scan still does its real job.
+
+### Live verification (against the real API)
+- Built a genuine EXIF/GPS-bearing JPEG. `stripImageMetadata` removed exactly the 72-byte APP1
+  segment; **Pillow still decodes the stripped image and its pixels are bit-identical** to the
+  original — the strip does not corrupt real photos.
+- Uploaded it through the running server to the real Messages API: got a valid `200` + parsed
+  structured reply (`no_food`), proving the **API accepts the stripped bytes**.
+- Confirmed live: `image/gif` → **415**; the 10th call from one IP within the window → **429**.
+- ⚠️ **The dev `ANTHROPIC_API_KEY` ran out of credit** during this verification burst (the API began
+  returning `400 "credit balance is too low"`). The app handled it exactly as designed — fail-closed to
+  "couldn't estimate", no fabricated number — but **the happy-path "~N calories" render could not be
+  re-demoed live afterwards.** Top up the key's balance before a live demo. (Not a code defect; the
+  happy path is covered by tests.)

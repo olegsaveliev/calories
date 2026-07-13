@@ -11,6 +11,12 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createServer, MAX_UPLOAD_BYTES } from "../src/server.js";
+import {
+  resetRateLimits,
+  RATE_LIMIT_MAX_PER_WINDOW,
+  MAX_CONCURRENT_VISION_CALLS,
+} from "../src/rate-limit.js";
+import { jpegWithExif, pngWithMetadata, SECRET_GPS_MARKER } from "./image-fixtures.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INDEX_HTML = join(__dirname, "..", "src", "index.html");
@@ -72,10 +78,12 @@ afterAll(async () => {
 beforeEach(() => {
   anthropicCallCount = 0;
   anthropicImpl = defaultAnthropicImpl;
+  resetRateLimits(); // R9 — every test starts with a full call budget
 });
 
-// A tiny but non-empty "image" payload (bytes are all we check; MIME is from the header).
-const jpegBytes = () => new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+// A structurally valid JPEG carrying EXIF/GPS — the metadata strip (R10) runs on the real bytes,
+// so the fixture has to actually parse as a JPEG.
+const jpegBytes = () => jpegWithExif();
 
 describe("POST /upload — 001 base contract", () => {
   it("AC1.2 — accepts a valid image and returns 200 with size + type", async () => {
@@ -245,7 +253,7 @@ describe("POST /upload — 002 Story 2: raster-MIME allowlist ahead of the model
     const res = await fetch(`${base}/upload`, {
       method: "POST",
       headers: { "Content-Type": "image/png" },
-      body: jpegBytes(),
+      body: pngWithMetadata(), // must really BE a PNG — the R10 strip parses it before egress
     });
 
     expect(res.status).toBe(200);
@@ -274,6 +282,140 @@ describe("POST /upload — 002 Story 2: raster-MIME allowlist ahead of the model
 
     expect(res.status).toBe(415);
     expect(anthropicCallCount).toBe(0);
+  });
+
+  it("R10 — gif/webp are now rejected with 415 (we cannot provably strip their metadata)", async () => {
+    for (const mime of ["image/gif", "image/webp"]) {
+      const res = await fetch(`${base}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": mime },
+        body: new Uint8Array([1, 2, 3, 4]),
+      });
+      expect(res.status).toBe(415);
+    }
+    expect(anthropicCallCount).toBe(0);
+  });
+});
+
+describe("POST /upload — R9: vision-call cost guard (rate limit + concurrency)", () => {
+  it("returns 429 once one IP exceeds its per-window call budget, WITHOUT spending a call", async () => {
+    const send = () =>
+      fetch(`${base}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "image/jpeg" },
+        body: jpegBytes(),
+      });
+
+    // Spend exactly the budget — all of these are allowed to hit the model.
+    for (let i = 0; i < RATE_LIMIT_MAX_PER_WINDOW; i++) {
+      const res = await send();
+      expect(res.status).toBe(200);
+    }
+    expect(anthropicCallCount).toBe(RATE_LIMIT_MAX_PER_WINDOW);
+
+    // One more is refused BEFORE the API call — the call count must not move.
+    const denied = await send();
+    expect(denied.status).toBe(429);
+    const json = await denied.json();
+    expect(typeof json.error).toBe("string");
+    expect(json.calorieResult).toBeUndefined(); // no number, no fake estimate
+    expect(anthropicCallCount).toBe(RATE_LIMIT_MAX_PER_WINDOW); // nothing extra was spent
+  });
+
+  it("caps concurrent in-flight vision calls — the overflow request gets 429, not a model call", async () => {
+    // Hold every in-flight model call open until we say so.
+    let releaseAll;
+    const gate = new Promise((resolve) => {
+      releaseAll = resolve;
+    });
+    anthropicImpl = async () => {
+      await gate;
+      return jsonResponse({ food_identified: true, calories: 400 });
+    };
+
+    const send = () =>
+      fetch(`${base}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "image/jpeg" },
+        body: jpegBytes(),
+      });
+
+    // Fire one more than the concurrency cap, all at once.
+    const inFlight = [];
+    for (let i = 0; i < MAX_CONCURRENT_VISION_CALLS + 1; i++) inFlight.push(send());
+
+    // Let them all reach the handler: the ones that took a slot are now parked on the gate, and the
+    // overflow one has already been refused. THEN let the held model calls finish.
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
+    expect(anthropicCallCount).toBeLessThanOrEqual(MAX_CONCURRENT_VISION_CALLS); // cap held
+    releaseAll();
+
+    const responses = await Promise.all(inFlight);
+    const statuses = responses.map((r) => r.status);
+
+    expect(statuses).toContain(429); // the overflow request was refused, not queued
+    expect(statuses.filter((s) => s === 200).length).toBe(MAX_CONCURRENT_VISION_CALLS);
+    expect(anthropicCallCount).toBeLessThanOrEqual(MAX_CONCURRENT_VISION_CALLS);
+  });
+
+  it("a 429 is not a fabricated estimate — the client gets an error, never a number", async () => {
+    for (let i = 0; i < RATE_LIMIT_MAX_PER_WINDOW; i++) {
+      await fetch(`${base}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "image/jpeg" },
+        body: jpegBytes(),
+      });
+    }
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+    const json = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(json.ok).toBeUndefined();
+    expect(JSON.stringify(json)).not.toMatch(/calories/i);
+  });
+});
+
+describe("POST /upload — R10: the photo that egresses is stripped", () => {
+  it("the bytes sent to Anthropic carry no EXIF/GPS from the uploaded photo", async () => {
+    let sentBase64 = null;
+    anthropicImpl = (_url, init) => {
+      const body = JSON.parse(init.body);
+      sentBase64 = body.messages[0].content.find((b) => b.type === "image").source.data;
+      return Promise.resolve(jsonResponse({ food_identified: true, calories: 420 }));
+    };
+
+    const photo = jpegBytes();
+    expect(Buffer.from(photo).includes(SECRET_GPS_MARKER)).toBe(true); // the upload HAS GPS in it
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: photo,
+    });
+    expect(res.status).toBe(200);
+
+    const sent = Buffer.from(sentBase64, "base64");
+    expect(sent.includes(SECRET_GPS_MARKER)).toBe(false); // ...and the third party never saw it
+  });
+});
+
+describe("POST /upload — R15: implausible numbers fail closed", () => {
+  it("an absurd calorie value comes back as 'unavailable', never as a number", async () => {
+    anthropicImpl = () => Promise.resolve(jsonResponse({ food_identified: true, calories: 999999999 }));
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    expect(json.calorieResult).toEqual({ status: "unavailable" });
+    expect(json.calorieResult.calories).toBeUndefined(); // not clamped to a plausible-looking number
   });
 });
 
@@ -322,9 +464,24 @@ describe("GET / (served frontend)", () => {
 describe("AC2.5 — no secret in client code", () => {
   it("served index.html contains no API key / secret", async () => {
     const html = await readFile(INDEX_HTML, "utf8");
-    // No Anthropic-style key, no generic secret assignment.
+    // No Anthropic-style key, no key-shaped identifier, no env var name.
     expect(html).not.toMatch(/sk-[a-zA-Z0-9-]{10,}/);
     expect(html).not.toMatch(/api[_-]?key/i);
-    expect(html).not.toMatch(/anthropic/i);
+    expect(html).not.toMatch(/ANTHROPIC_API_KEY/);
+    // NOTE: this used to also forbid /anthropic/i outright. R10(b) requires the page to NAME the
+    // third party the photo is sent to, so the vendor's name is now expected in the copy. The scan
+    // above still catches an actual key/secret, which is what AC2.5 is really about.
+  });
+});
+
+describe("R10(b) — the user is told the photo leaves the machine", () => {
+  it("served index.html carries a plain-language third-party notice", async () => {
+    const res = await fetch(`${base}/`);
+    const html = await res.text();
+
+    expect(html).toContain('data-testid="privacy-notice"');
+    expect(html).toMatch(/sent to Anthropic/i); // names the third party
+    expect(html).toMatch(/metadata are removed/i); // says what we strip
+    expect(html).toMatch(/is stored here/i); // says nothing is retained
   });
 });

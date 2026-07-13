@@ -8,6 +8,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { isSupportedRasterMime, estimateCalories } from "./vision.js";
+import { acquireVisionSlot } from "./rate-limit.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -124,12 +125,32 @@ async function handleUpload(req, res) {
     return;
   }
 
+  // R9 — cost guard. The vision call spends real money, and this endpoint is unauthenticated. Take a
+  // rate-limit + concurrency slot BEFORE the API call; if the caller is over their per-IP window, or
+  // too many calls are already in flight, we spend nothing and return 429.
+  const slot = acquireVisionSlot(req.socket.remoteAddress);
+  if (!slot.allowed) {
+    sendJson(res, 429, {
+      error:
+        slot.reason === "concurrency"
+          ? "too many photos being analysed right now, try again in a moment"
+          : "too many requests, try again in a minute",
+    });
+    return;
+  }
+
   // Story 1 / Story 3 (002) — forward the validated image to the vision model. estimateCalories()
   // never throws and never returns a fabricated number: every failure mode (refusal, timeout,
-  // network/API error, unparseable/non-integer reply) collapses to status "unavailable" (AC1.2);
-  // an image with no recognizable meal collapses to "no_food" (AC3.1). Each call is independent —
-  // nothing is cached or persisted (AC3.2).
-  const result = await estimateCalories(body, mime);
+  // network/API error, unparseable/non-integer/implausible reply, un-strippable image) collapses to
+  // status "unavailable" (AC1.2); an image with no recognizable meal collapses to "no_food" (AC3.1).
+  // Each call is independent — nothing is cached or persisted (AC3.2). The image's EXIF/GPS metadata
+  // is stripped inside estimateCalories before it egresses (R10).
+  let result;
+  try {
+    result = await estimateCalories(body, mime);
+  } finally {
+    slot.release(); // always give the in-flight slot back, success or throw
+  }
 
   const calorieResult =
     result.status === "estimated"
