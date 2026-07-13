@@ -72,6 +72,10 @@ describe("estimateCalories", () => {
     const body = JSON.parse(init.body);
     expect(body.model).toBe("claude-sonnet-5");
     expect(body.max_tokens).toBeLessThanOrEqual(1024);
+    // Review fix M1 — thinking must be EXPLICITLY disabled: omitting it turns adaptive thinking
+    // on for claude-sonnet-5, and thinking tokens would share the small max_tokens budget with
+    // the structured JSON answer.
+    expect(body.thinking).toEqual({ type: "disabled" });
     expect(body.output_config.format.type).toBe("json_schema");
     expect(body.output_config.format.schema.required).toEqual(
       expect.arrayContaining(["food_identified", "calories"]),

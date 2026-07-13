@@ -102,6 +102,12 @@ export async function estimateCalories(imageBuffer, mime) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
+        // Review fix M1 — explicitly disable thinking (30-design.md decision 3: "no extended
+        // thinking"). On claude-sonnet-5, OMITTING this field means adaptive thinking ON, and
+        // thinking tokens share max_tokens — a real photo could exhaust the 256-token budget
+        // before the structured JSON was emitted (stop_reason: max_tokens → parse fail →
+        // fail-closed on a VALID photo). Disabling reserves the whole budget for the answer.
+        thinking: { type: "disabled" },
         messages: [
           {
             role: "user",

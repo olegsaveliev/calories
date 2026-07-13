@@ -110,3 +110,15 @@ the model ID, structured-output schema, and request shape are accepted by the re
   manifest's accepted "localhost-only" posture is unchanged — still must be resolved before any
   exposure beyond localhost.
 - No persistence anywhere (AC3.2 falls out for free — verified by the independent-call test).
+
+## Review fix (M1, human-dispositioned)
+
+- **M1 fixed:** `src/vision.js` now sends `thinking: { type: "disabled" }` explicitly in the
+  Messages API request. Omitting the field on `claude-sonnet-5` means adaptive thinking ON, and
+  thinking tokens share `max_tokens` — a real food photo could exhaust the 256-token budget before
+  the structured JSON was emitted (`stop_reason: max_tokens` → parse fail → fail-closed on a VALID
+  photo). This applies 30-design.md decision 3 ("no extended thinking") explicitly. Field shape
+  verified against the API reference. `tests/vision.test.js` request-shape test now asserts the
+  outbound body carries `thinking: { type: "disabled" }`. Re-verified live against the real API
+  (2xx + parsed structured reply). Lint + all 37 tests green. Minors m2/m3 were accepted & logged,
+  not fixed (per disposition).
