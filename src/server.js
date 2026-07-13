@@ -7,6 +7,7 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { isSupportedRasterMime, estimateCalories } from "./vision.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -78,7 +79,10 @@ function readBodyCapped(req) {
 }
 
 /**
- * Handle POST /upload per the ACs (AC1.2 happy path, AC2.1–2.4 negatives).
+ * Handle POST /upload per the 001 base contract (AC1.2 happy path, AC2.1–2.4 negatives) PLUS the
+ * 002 additions: an explicit raster-MIME allowlist ahead of any model call (Story 2), and the
+ * vision-model calorie estimate itself (Story 1 / Story 3). The allowlist check happens BEFORE the
+ * body is even read — an unsupported type never reaches the model (AC2.2).
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @returns {Promise<void>}
@@ -86,16 +90,18 @@ function readBodyCapped(req) {
 async function handleUpload(req, res) {
   const contentType = (req.headers["content-type"] || "").trim();
 
-  // AC2.1 — no Content-Type at all means nothing meaningful was sent.
+  // AC2.1 (001) — no Content-Type at all means nothing meaningful was sent.
   if (contentType === "") {
     sendJson(res, 400, { error: "no file provided" });
     return;
   }
 
-  // AC2.2 — only image/* content types are accepted (checked on the header, ground truth per ADR-002).
+  // Story 2 / AC2.1–AC2.2 (002) — explicit raster-image allowlist, replacing 001's loose
+  // `startsWith("image/")` check (manifest hard pre-condition R3/M1/M2). Anything not on the
+  // allowlist (incl. image/svg+xml, non-image types) is rejected with 415 BEFORE any API call.
   const mime = contentType.split(";")[0].trim().toLowerCase();
-  if (!mime.startsWith("image/")) {
-    sendJson(res, 415, { error: "file must be an image" });
+  if (!isSupportedRasterMime(mime)) {
+    sendJson(res, 415, { error: "unsupported file type" });
     return;
   }
 
@@ -104,7 +110,7 @@ async function handleUpload(req, res) {
     body = await readBodyCapped(req);
   } catch (err) {
     if (err && err.tooLarge) {
-      // AC2.3 — oversized: rejected while streaming, before the whole body lands in memory.
+      // AC2.3 (001) — oversized: rejected while streaming, before the whole body lands in memory.
       sendJson(res, 413, { error: "file too large" });
       return;
     }
@@ -112,14 +118,25 @@ async function handleUpload(req, res) {
     return;
   }
 
-  // AC2.4 — zero-byte body.
+  // AC2.4 (001) — zero-byte body.
   if (body.length === 0) {
     sendJson(res, 400, { error: "file is empty" });
     return;
   }
 
-  // AC1.2 — success: echo the received file's size (bytes) and MIME type.
-  sendJson(res, 200, { ok: true, size: body.length, type: mime });
+  // Story 1 / Story 3 (002) — forward the validated image to the vision model. estimateCalories()
+  // never throws and never returns a fabricated number: every failure mode (refusal, timeout,
+  // network/API error, unparseable/non-integer reply) collapses to status "unavailable" (AC1.2);
+  // an image with no recognizable meal collapses to "no_food" (AC3.1). Each call is independent —
+  // nothing is cached or persisted (AC3.2).
+  const result = await estimateCalories(body, mime);
+
+  const calorieResult =
+    result.status === "estimated"
+      ? { status: "estimated", calories: result.calories }
+      : { status: result.status };
+
+  sendJson(res, 200, { ok: true, size: body.length, type: mime, calorieResult });
 }
 
 /**

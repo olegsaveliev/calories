@@ -56,9 +56,25 @@
         let data = {};
         try { data = await res.json(); } catch { /* non-JSON body */ }
 
-        if (res.ok && data.ok) {
-          // AC1.3 — visible confirmation with the received file info.
+        if (res.ok && data.ok && data.calorieResult) {
+          // 002: render the calorie-model outcome, never the plain 001 "file received" line.
+          const cr = data.calorieResult;
+          if (cr.status === 'estimated') {
+            // AC1.1 — happy path: a single displayed calorie number.
+            setStatus(`~${cr.calories} calories`, true);
+          } else if (cr.status === 'no_food') {
+            // AC3.1 — no recognizable meal in the photo: clear message, no number.
+            setStatus("Couldn't identify a meal in this photo.", false);
+          } else {
+            // AC1.2 — refusal/timeout/network/parse failure: clear message, no number.
+            setStatus("Couldn't estimate calories, try again.", false);
+          }
+        } else if (res.ok && data.ok) {
+          // Fallback for a success response with no calorieResult (shouldn't happen in practice).
           setStatus(`Photo received: ${data.size} bytes, ${data.type}.`, true);
+        } else if (res.status === 415) {
+          // Story 2 / AC2.2 — unsupported/ambiguous image type, rejected before reaching the model.
+          setStatus('Unsupported file type.', false);
         } else {
           setStatus(`Upload rejected: ${data.error || res.status}.`, false);
         }
