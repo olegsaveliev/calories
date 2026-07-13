@@ -3,6 +3,15 @@
 > One entry per delivered feature / fixed bug, newest at the top. Written by `delivery-pm` (wrap) and
 > `bugfix`. This is the narrative history; `manifest.md` is the current state.
 
+## 2026-07-13 — BUG-001 Dropzone icon + label centering (bugfix)
+- Pick-screen dropzone: the camera icon sat left of centre and "Add a photo" wasn't stacked under it.
+- Root cause: `#dropzone-empty` (holding the icon + labels) had no layout rule, so it was a plain block
+  sized to the widest line; the 64px icon aligned left while `text-align:center` centred only the text.
+- Fix: made `#dropzone-empty` a centred flex column (`display:flex; flex-direction:column;
+  align-items:center; gap:14px`) — CSS-only, `src/index.html`. No behaviour/contract change.
+- Test-first guard: `tests/upload.test.js` → "BUG-001 …" (failed before, passes after). Suite 74/74 green.
+- Severity: minor/cosmetic. bugs.md: BUG-001 → fixed. Issue: #11 · PR: #12
+
 ## 2026-07-13 — 003 Redesign — "Midnight Lime" two-screen UI rebuild (v0.3.0)
 - Full **frontend-only** rebuild of `src/index.html`: a Pick screen (dropzone + privacy notice +
   disabled-until-selected CTA) and a Result screen (photo thumbnail + animated-ring hero calorie

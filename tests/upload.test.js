@@ -473,6 +473,20 @@ describe("GET / (served frontend) — 003 Midnight Lime rebuild", () => {
     expect(html).toMatch(/estimate calories/i);
   });
 
+  it("BUG-001 — dropzone-empty content is a centred flex column (icon centred, label directly under it)", async () => {
+    const html = await readFile(INDEX_HTML, "utf8");
+
+    // The icon + labels live inside #dropzone-empty. Without its own centring rule the 64px icon
+    // aligns to the block's left edge (see .factory/bugs.md BUG-001). Guard: the rule must exist and
+    // declare a centred flex column so the icon is centred with the label stacked beneath it.
+    const ruleMatch = html.match(/#dropzone-empty\s*\{([^}]*)\}/);
+    expect(ruleMatch).not.toBeNull();
+    const rule = ruleMatch[1].replace(/\s+/g, " ");
+    expect(rule).toMatch(/display:\s*flex/);
+    expect(rule).toMatch(/flex-direction:\s*column/);
+    expect(rule).toMatch(/align-items:\s*center/);
+  });
+
   it("AC3.1/AC3.4/AC4.1/AC4.2 — Result screen: hero-number container, error-state container, and reset controls all present", async () => {
     const html = await readFile(INDEX_HTML, "utf8");
 
