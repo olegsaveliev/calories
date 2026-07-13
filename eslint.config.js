@@ -22,6 +22,9 @@ export default [
     },
   },
   {
-    ignores: ["node_modules/", "coverage/", "src/index.html"],
+    // Lint app source + tests only. `.factory/` holds pipeline docs and design-handoff
+    // artifacts (e.g. a designer's browser JS), which are not part of the running app and
+    // must not be held to the Node source lint rules.
+    ignores: ["node_modules/", "coverage/", "src/index.html", ".factory/"],
   },
 ];
