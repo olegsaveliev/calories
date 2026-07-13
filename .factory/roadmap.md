@@ -12,7 +12,7 @@
 | 004 | Portion adjuster | Scale the calorie estimate by portion (½× / 1× / 2× or a slider) — recomputed in the browser. | S | queued | 002 |
 | 005 | Camera & drag-drop | Snap a photo from the device camera or drag-and-drop an image onto the page to upload. | S | queued | 001 |
 | 006 | Shareable calorie card | Render a downloadable result card (the photo + its calorie estimate) to save or share. | M | queued | 002 |
-| 007 | Food ID + confidence | Name the detected dish and show a low/med/high confidence badge next to the estimate. | S | queued | 002 |
+| 007 | Food ID + confidence | Name the detected dish and show a low/med/high confidence badge next to the estimate. | S | in progress | 002 |
 | 008 | Browser E2E + estimate timeout | Add a Playwright browser-E2E tier for the client-side state machine, and implement the client-side estimate timeout (review F1, deferred from 003). | M | queued | 003 |
 
 ## GitHub Issues (mirror — see `.factory/github.md`)
