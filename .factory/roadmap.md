@@ -7,7 +7,7 @@
 | ID  | Feature | One-liner | Size | Status | Blocked by |
 |-----|---------|-----------|------|--------|-----------|
 | 001 | Initial prototype | Upload a picture of food. | S | delivered | — |
-| 002 | Calorie estimate | Send the uploaded photo to a vision model and show an estimated calorie count. | M | queued | 001 |
+| 002 | Calorie estimate | Send the uploaded photo to a vision model and show an estimated calorie count. | M | in progress | 001 |
 | 003 | Food ID + confidence | Name the detected dish and show a low/med/high confidence badge next to the estimate. | S | queued | 002 |
 | 004 | Portion adjuster | Scale the calorie estimate by portion (½× / 1× / 2× or a slider) — recomputed in the browser. | S | queued | 002 |
 | 005 | Camera & drag-drop | Snap a photo from the device camera or drag-and-drop an image onto the page to upload. | S | queued | 001 |
