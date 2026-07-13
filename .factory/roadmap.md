@@ -7,7 +7,7 @@
 | ID  | Feature | One-liner | Size | Status | Blocked by |
 |-----|---------|-----------|------|--------|-----------|
 | 001 | Initial prototype | Upload a picture of food. | S | delivered | — |
-| 002 | Calorie estimate | Send the uploaded photo to a vision model and show an estimated calorie count. | M | in progress | 001 |
+| 002 | Calorie estimate | Send the uploaded photo to a vision model and show an estimated calorie count. | M | delivered | 001 |
 | 003 | Food ID + confidence | Name the detected dish and show a low/med/high confidence badge next to the estimate. | S | queued | 002 |
 | 004 | Portion adjuster | Scale the calorie estimate by portion (½× / 1× / 2× or a slider) — recomputed in the browser. | S | queued | 002 |
 | 005 | Camera & drag-drop | Snap a photo from the device camera or drag-and-drop an image onto the page to upload. | S | queued | 001 |
@@ -19,6 +19,7 @@ Repo: `olegsaveliev/calories` · main is **protected** (PR + green CI to merge).
 | Feature | Issue |
 |---------|-------|
 | 001 Initial prototype | [#1](https://github.com/olegsaveliev/calories/issues/1) |
+| 002 Calorie estimate | [#4](https://github.com/olegsaveliev/calories/issues/4) |
 
 ## Parked (needs a decision first)
 _Ideas that conflict with `PROJECT.md` non-goals, or need a call before queuing._
