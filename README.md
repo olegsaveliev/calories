@@ -10,8 +10,9 @@ across features, and an enforced **git / CI / Issues** flow. Point it at *any* p
 
 ## Quick start
 
-**Prerequisites:** [Claude Code](https://claude.com/claude-code), `git`, and (optional) the GitHub CLI `gh`
-for the git/Issues flow. Node or Python only if your stack preset needs it.
+**Prerequisites:** [Claude Code](https://claude.com/claude-code) + a package manager (`brew`/`apt`/`dnf`).
+Everything else — `git`, `node`/`python` (per your stack), and `gh` — is **auto-checked and installed by `./setup.sh`**,
+so you don't check anything by hand. (Claude Code and the package manager are the only two it can't install for you.)
 
 ### The 2-minute path (no questions)
 1. **Fill `project-config.yaml`** — name, one-liner, non-goals, stack (`web-vanilla` / `node` / `python`), first features, GitHub.
