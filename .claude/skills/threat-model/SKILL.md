@@ -1,5 +1,5 @@
 ---
-name: {{PROJECT_SLUG}}-threat-model
+name: calories-threat-model
 description: For this project (reads PROJECT.md + manifest.md first). Pipeline Step 7 (conditional). First-pass threat model — a small data-flow
   sketch with trust boundaries, a STRIDE-per-element pass, and an L×I-scored risk register. Runs an
   OWASP-LLM Top-10 + lethal-trifecta pass ONLY when an AI/model is in scope (otherwise states it's N/A).
@@ -7,7 +7,7 @@ description: For this project (reads PROJECT.md + manifest.md first). Pipeline S
   spec + design; writes 70-threats.md.
 ---
 
-# Threat Model — {{PROJECT_NAME}} (pipeline Step 7, conditional)
+# Threat Model — Calories (pipeline Step 7, conditional)
 
 **Goal.** Answer "how could this be attacked or go wrong, and which risks matter most?" — before ship,
 not after an incident. Identify and rank; leave fixing and sign-off to others.

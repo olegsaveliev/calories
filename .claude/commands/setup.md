@@ -18,7 +18,7 @@ plan with the user before any GitHub push. **Goal: get them from clone → ready
   Then write their answers into `project-config.yaml` so it's recorded.
 
 ## 1. Personalise the template (mechanical — you may call `./setup.sh <slug>`)
-- Replace `{{PROJECT_NAME}}` and `{{PROJECT_SLUG}}` everywhere: `PROJECT.md`, `.factory/manifest.md`,
+- Replace `Calories` and `calories` everywhere: `PROJECT.md`, `.factory/manifest.md`,
   `src/`, `package.json`, and each `.claude/skills/*/SKILL.md` `name:` line.
 - Write `PROJECT.md` from the config (what / who / non-goals / tech).
 

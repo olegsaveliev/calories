@@ -1,12 +1,12 @@
 ---
-name: {{PROJECT_SLUG}}-reviewer
+name: calories-reviewer
 description: For this project (reads PROJECT.md + manifest.md first). Independent code review — run in a FRESH subagent that did not write the
   code, to remove author bias. Reads the feature spec + the changed code in src/ + manifest/ADRs, hunts
   for bugs the behaviour tests won't catch (logic, security, regression, edge cases, dead code, ADR
   drift), and writes 55-review.md with findings + an independence tier. Reports; does NOT fix or ship.
 ---
 
-# Code Reviewer — {{PROJECT_NAME}} (pipeline Step 5.5, run in isolation)
+# Code Reviewer — Calories (pipeline Step 5.5, run in isolation)
 
 **Goal.** Give the code a skeptical read from a context that did NOT build it, so flaws the author
 rationalised away get caught before QA and before ship.

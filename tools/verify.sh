@@ -18,7 +18,7 @@ chk "/setup + /factory-run commands"     "test -f .claude/commands/setup.md && t
 chk "CI workflow present"                "test -f .github/workflows/ci.yml"
 
 # not-yet-onboarded warnings (placeholders should be gone AFTER /setup)
-if grep -rq --exclude-dir=node_modules --exclude-dir=.git '{{PROJECT_' . 2>/dev/null; then
+if grep -rq --exclude-dir=node_modules --exclude-dir=.git --exclude=verify.sh '{{PROJECT_' . 2>/dev/null; then
   warn=1; note "unresolved {{PROJECT_*}} placeholders remain → run ./setup.sh <slug> + /setup"
 fi
 if grep -rq "not yet initialised" .factory/manifest.md 2>/dev/null; then

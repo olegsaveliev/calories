@@ -1,13 +1,16 @@
 {
-  "name": "{{PROJECT_SLUG}}",
-  "version": "0.4.0",
+  "name": "calories",
+  "version": "0.0.0",
   "private": true,
-  "description": "Dev-only test/lint tooling (web-vanilla preset). The shipped app in src/ has no runtime dependency.",
+  "type": "module",
+  "description": "Calories — estimate the calories in a meal from a photo. Node service (frontend + one vision-model API route).",
   "scripts": {
-    "lint": "node tools/lint.mjs",
-    "test": "playwright test"
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0"
+    "@eslint/js": "^9.15.0",
+    "eslint": "^9.15.0",
+    "vitest": "^2.1.0"
   }
 }

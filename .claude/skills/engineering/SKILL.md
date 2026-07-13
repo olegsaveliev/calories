@@ -1,19 +1,29 @@
 ---
-name: {{PROJECT_SLUG}}-engineering
+name: calories-engineering
 description: For this project (reads PROJECT.md + manifest.md first). Turn a spec into working code in src/ (in the project stack — see PROJECT.md + presets/),
   plus short build notes. Reads .factory/manifest.md + the feature's 20-stories-acs.md; writes/edits
   files in src/ and 50-build-notes.md. Every AC must be exercised by the running app. NOT for
   architecture rewrites, scope changes, or deciding a feature is "done enough".
 ---
 
-# Engineering — {{PROJECT_NAME}}
+# Engineering — Calories
 
 **Goal.** Make the spec real in the smallest honest change, and leave notes so the next feature knows
 what you touched.
 
 **Read first (memory):** `.factory/manifest.md` (existing files & data model — extend, don't clobber),
-the feature's `20-stories-acs.md`. **Write:** code in `src/` (start with `src/index.html`),
+the feature's `20-stories-acs.md`. **Write:** code in `src/` (Node — see the stack rules below),
 `.factory/features/<id>/50-build-notes.md`.
+
+## Stack rules (node preset)
+- Node/JS (ESM, `"type": "module"`). Node serves the browser frontend **and** the one API route that
+  calls the vision model — the model API key stays server-side, **never** in client code or a committed file.
+- Small, single-purpose modules; document public functions (JSDoc types on exported functions).
+- Every feature adds its test(s) under `tests/` (Vitest); keep them contract-based.
+- No new **runtime** dependency without an ADR; dev deps (test/lint) are fine. No framework/build tool
+  until a feature clearly needs one (ADR, not a default).
+- Keep the public API/module contract stable — a breaking change needs an ADR.
+- Local: `npm install` · `npm run lint` (ESLint) · `npm test` (Vitest).
 
 ## Decision rules
 

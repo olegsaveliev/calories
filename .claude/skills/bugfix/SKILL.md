@@ -1,12 +1,12 @@
 ---
-name: {{PROJECT_SLUG}}-bugfix
+name: calories-bugfix
 description: For this project (reads PROJECT.md + manifest.md first). Handle a reported bug as first-class work — log it in .factory/bugs.md,
   reproduce it, write a FAILING test first, fix minimally, prove the test now passes AND nothing else
   regressed, then update memory. Owns bugs.md. Uses the qa + engineering skills for the test + fix.
   NOT for deciding severity/ship, or fixing beyond the reported bug.
 ---
 
-# Bugfix — {{PROJECT_NAME}} (test-first bug flow, owns `bugs.md`)
+# Bugfix — Calories (test-first bug flow, owns `bugs.md`)
 
 **Goal.** Turn "it's broken" into a tracked, reproduced, test-guarded fix that can never silently
 come back — and leave a trail in memory.

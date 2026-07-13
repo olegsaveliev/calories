@@ -1,27 +1,19 @@
-# ── AI Factory: fill this in, then run /setup ──────────────────────────────
-# This is the "no-questions" path: fill the fields, run /setup, and the factory
-# scaffolds itself from these answers. (Leave it and /setup will interview you instead.)
-
 project:
-  name: "My Project"                 # human-readable name (shown in titles)
-  slug: "my-project"                 # lowercase-hyphens (used in folders, skill names, package name)
-  one_liner: "What it does, in one or two plain sentences."
-  primary_user: "Who it's for."
-  non_goals: "What you are deliberately NOT building yet (the most important line)."
-
+  name: "Calories"
+  slug: "calories"
+  one_liner: "Calculates the calories in a meal from a photo of the food."
+  primary_user: "Anyone who wants to know the calories in a meal from a photo."
+  non_goals: "No accounts/login, no meal history/tracking, no nutrition beyond a calorie estimate (yet)."
 stack:
-  preset: "web-vanilla"              # web-vanilla | node | python   (see presets/)
-  notes: ""                          # any stack specifics worth recording
-
+  preset: "node"
+  notes: "Node serves the frontend and hosts the API route that calls the vision model (an API key can't live safely in client-only code). ESLint + Vitest."
 github:
-  enable: true                       # wire git + CI + Issues?
-  remote: ""                         # e.g. https://github.com/you/your-repo.git  (blank = local only, no push)
+  enable: false          # chose local-only at setup; wire later
+  remote: ""             # existing origin present locally: https://github.com/olegsaveliev/aifactory.git
   default_branch: "main"
-  protect_branch: true               # require a PR + green CI before merging (needs a public repo or GitHub Pro)
-
-# Seeds .factory/roadmap.md. Add as many as you like; keep them small.
+  protect_branch: false
 first_features:
   - id: "001"
-    name: "First feature"
-    one_liner: "One line on what it does."
+    name: "Initial prototype"
+    one_liner: "Upload a picture of food."
     size: "S"

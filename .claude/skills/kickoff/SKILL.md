@@ -1,12 +1,12 @@
 ---
-name: {{PROJECT_SLUG}}-kickoff
+name: calories-kickoff
 description: For this project (reads PROJECT.md + manifest.md first). Step 0 of the pipeline. Given a feature ID the human picks from
   roadmap.md ("pick 002"), open that feature — create .factory/features/<id-slug>/00-feature.md from
   the roadmap row, and flip its roadmap status queued → in progress. Reads roadmap.md + manifest.md +
   PROJECT.md. NOT for choosing WHICH feature, adding new features, reordering, or overriding a block.
 ---
 
-# Kickoff — {{PROJECT_NAME}} (pipeline Step 0)
+# Kickoff — Calories (pipeline Step 0)
 
 **Goal.** Turn a picked roadmap ID into a clean starting brief the rest of the pipeline can run on —
 and mark the board so it's clear that feature is now in flight.

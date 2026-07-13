@@ -1,12 +1,12 @@
 ---
-name: {{PROJECT_SLUG}}-delivery-pm
+name: calories-delivery-pm
 description: For this project (reads PROJECT.md + manifest.md first). Close out a feature — write a short status note AND update the project
   memory so the NEXT feature inherits this one. Reads all of the feature folder + current
   .factory/manifest.md and build-log.md; writes 99-status.md, updates manifest.md (features, live
   surfaces, data model), and appends one block to build-log.md. NOT for commitments or roadmap changes.
 ---
 
-# Delivery / Wrap — {{PROJECT_NAME}}  ← the memory writer (pipeline step 10)
+# Delivery / Wrap — Calories  ← the memory writer (pipeline step 10)
 
 **Goal.** Leave the project truthfully describing itself, so feature N+1's first read tells it exactly
 what exists. This is the step that makes the whole loop work.

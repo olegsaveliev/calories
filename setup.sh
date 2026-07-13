@@ -93,8 +93,8 @@ if [ ! -d .git ]; then git init -q && echo "✓ git initialised"; else echo "•
 # ── 4. placeholder replacement (from the config's slug/name) ───────────────
 sedi() { if sed --version >/dev/null 2>&1; then sed -i "$@"; else sed -i '' "$@"; fi; }
 if [ -n "${SLUG:-}" ] && [ "$SLUG" != "my-project" ]; then
-  files=$(grep -rl --exclude-dir=node_modules --exclude-dir=.git -e '{{PROJECT_SLUG}}' -e '{{PROJECT_NAME}}' . 2>/dev/null || true)
-  for f in $files; do sedi "s/{{PROJECT_SLUG}}/$SLUG/g; s/{{PROJECT_NAME}}/${NAME:-$SLUG}/g" "$f"; done
+  files=$(grep -rl --exclude-dir=node_modules --exclude-dir=.git -e 'calories' -e 'Calories' . 2>/dev/null || true)
+  for f in $files; do sedi "s/calories/$SLUG/g; s/Calories/${NAME:-$SLUG}/g" "$f"; done
   echo "✓ placeholders replaced ($SLUG)"
 else
   echo "• slug is default/empty — placeholders left for /setup"

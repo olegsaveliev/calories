@@ -1,5 +1,5 @@
 ---
-name: {{PROJECT_SLUG}}-ux-design
+name: calories-ux-design
 description: For this project (reads PROJECT.md + manifest.md first). Improve the LOOK & FEEL (typography, spacing, colour, layout) without
   changing behaviour. Offers the human 2-3 visual directions to pick from, applies CSS-only changes
   (no framework, per ADR-001), then confirms in two lanes — behaviour preserved (re-run QA) +
@@ -8,7 +8,7 @@ description: For this project (reads PROJECT.md + manifest.md first). Improve th
   NOT for the taste sign-off, brand identity, or anything needing a framework/new files.
 ---
 
-# UX / Visual Design — {{PROJECT_NAME}}
+# UX / Visual Design — Calories
 
 **Goal.** Make the app feel modern and accessible while leaving every feature working exactly as before.
 Propose the look; prove it's safe; hand the taste call to the human.

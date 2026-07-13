@@ -1,12 +1,12 @@
 ---
-name: {{PROJECT_SLUG}}-qa
+name: calories-qa
 description: For this project (reads PROJECT.md + manifest.md first). Turn a feature's acceptance criteria into a small risk-driven test suite
   — happy paths PLUS explicit negatives (empty input, duplicates, weird characters), each with a
   specific input and a user-visible expected outcome. Reads 20-stories-acs.md + 50-build-notes.md;
   writes 60-test-cases.md. NOT for setting the release bar, severity, or making the ship call.
 ---
 
-# QA — {{PROJECT_NAME}}
+# QA — Calories
 
 **Goal.** Find the ways the feature breaks, not just prove the demo works.
 

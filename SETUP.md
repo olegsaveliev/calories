@@ -18,7 +18,7 @@ Pre-fill `project-config.yaml`, then run **`./setup.sh --yes`** to skip the ques
 ## What onboarding produces (either path)
 | Step | Result |
 |------|--------|
-| Personalise | `{{PROJECT_NAME}}` / `{{PROJECT_SLUG}}` replaced everywhere; `PROJECT.md` written |
+| Personalise | `Calories` / `calories` replaced everywhere; `PROJECT.md` written |
 | Stack preset | `presets/<preset>/ci.yml` → `.github/workflows/ci.yml`; engineering rules set for your stack |
 | Roadmap | your first features seeded in `.factory/roadmap.md` (all `queued`) |
 | Memory | blank-state `manifest.md` (v0.0.0) + empty `build-log` / `dev-cost` / `bugs` / `features/` |

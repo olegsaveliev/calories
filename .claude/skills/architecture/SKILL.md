@@ -1,5 +1,5 @@
 ---
-name: {{PROJECT_SLUG}}-architecture
+name: calories-architecture
 description: For this project (reads PROJECT.md + manifest.md first). Pipeline Step 3 (between spec and build). Read the feature's spec +
   manifest + existing ADRs; reuse decisions already in force, and record a NEW ADR only when a choice
   is hard to reverse AND likely to be questioned later. Writes 30-design.md (short approach note) and
@@ -7,7 +7,7 @@ description: For this project (reads PROJECT.md + manifest.md first). Pipeline S
   choices or overturning an accepted ADR — those go back to the human.
 ---
 
-# Architecture — {{PROJECT_NAME}} (pipeline Step 3, owns `decisions/`)
+# Architecture — Calories (pipeline Step 3, owns `decisions/`)
 
 **Goal.** Keep the app's structural choices consistent and cheap to revisit: apply the decisions
 already in force, write down only the decisions that will matter later, and never silently reverse one.

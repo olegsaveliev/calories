@@ -1,12 +1,12 @@
 ---
-name: {{PROJECT_SLUG}}-prod-ba
+name: calories-prod-ba
 description: For this project (reads PROJECT.md + manifest.md first). Turn a feature request into a small, buildable spec — INVEST-style
   stories with binary Given/When/Then acceptance criteria, a one-paragraph PRD, and an out-of-scope
   list. Reads .factory/manifest.md (current state) + the feature's 00-feature.md; writes
   20-stories-acs.md, 20-prd.md into the feature folder. NOT for scope cuts, prioritisation, or ship calls.
 ---
 
-# PROD/BA — {{PROJECT_NAME}}
+# PROD/BA — Calories
 
 **Goal.** Turn a feature request into a spec a developer could build from without asking a question.
 
