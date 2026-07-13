@@ -7,6 +7,7 @@
   <style>
     body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
     .controls { display: flex; gap: .5rem; align-items: center; margin: 1rem 0; flex-wrap: wrap; }
+    .notice { font-size: .875rem; color: #555; border-left: 3px solid #ccc; padding-left: .75rem; }
     #status { margin-top: 1rem; min-height: 1.5rem; }
     #status.ok { color: #0a7d28; }
     #status.err { color: #b00020; }
@@ -17,6 +18,12 @@
   <main id="app">
     <h1 data-testid="title">Calories</h1>
     <p>Pick a food photo and send it to the service.</p>
+
+    <!-- R10(b) — plain-language notice: the photo leaves this machine. No dark patterns. -->
+    <p class="notice" data-testid="privacy-notice">
+      Your photo is sent to Anthropic's Claude model to estimate the calories. Location and camera
+      metadata are removed before it is sent, and neither the photo nor the estimate is stored here.
+    </p>
 
     <div class="controls">
       <!-- AC1.1 — visible file input that accepts images + a control to send it -->
@@ -56,9 +63,25 @@
         let data = {};
         try { data = await res.json(); } catch { /* non-JSON body */ }
 
-        if (res.ok && data.ok) {
-          // AC1.3 — visible confirmation with the received file info.
+        if (res.ok && data.ok && data.calorieResult) {
+          // 002: render the calorie-model outcome, never the plain 001 "file received" line.
+          const cr = data.calorieResult;
+          if (cr.status === 'estimated') {
+            // AC1.1 — happy path: a single displayed calorie number.
+            setStatus(`~${cr.calories} calories`, true);
+          } else if (cr.status === 'no_food') {
+            // AC3.1 — no recognizable meal in the photo: clear message, no number.
+            setStatus("Couldn't identify a meal in this photo.", false);
+          } else {
+            // AC1.2 — refusal/timeout/network/parse failure: clear message, no number.
+            setStatus("Couldn't estimate calories, try again.", false);
+          }
+        } else if (res.ok && data.ok) {
+          // Fallback for a success response with no calorieResult (shouldn't happen in practice).
           setStatus(`Photo received: ${data.size} bytes, ${data.type}.`, true);
+        } else if (res.status === 415) {
+          // Story 2 / AC2.2 — unsupported/ambiguous image type, rejected before reaching the model.
+          setStatus('Unsupported file type.', false);
         } else {
           setStatus(`Upload rejected: ${data.error || res.status}.`, false);
         }

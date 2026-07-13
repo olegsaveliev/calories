@@ -8,3 +8,9 @@ node_modules/
 
 # Claude Code personal (per-user) settings — never ship these
 .claude/settings.local.json
+
+# Secrets (R12) — ANTHROPIC_API_KEY is env-only (ADR-001) and must never be committable.
+# The obvious local place to put it is a .env file, so make that structurally un-committable.
+.env
+.env.*
+!.env.example

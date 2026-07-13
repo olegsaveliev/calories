@@ -1,10 +1,22 @@
 // Feature 001 — integration tests for the upload endpoint + served frontend.
-// Every server AC is exercised with REAL HTTP requests against an ephemeral-port server.
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+// Feature 002 — extends this suite with the vision-model calorie estimate (Story 1), the
+// raster-MIME allowlist ahead of the model call (Story 2), and the no-meal / independent-call
+// guarantees (Story 3).
+//
+// The outbound call to the Anthropic Messages API is ALWAYS mocked here — a real
+// `ANTHROPIC_API_KEY` may be present in the local/dev environment, but these tests must never make
+// a real network call to api.anthropic.com, so CI stays green (and fast) without a key.
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createServer, MAX_UPLOAD_BYTES } from "../src/server.js";
+import {
+  resetRateLimits,
+  RATE_LIMIT_MAX_PER_WINDOW,
+  MAX_CONCURRENT_VISION_CALLS,
+} from "../src/rate-limit.js";
+import { jpegWithExif, pngWithMetadata, SECRET_GPS_MARKER } from "./image-fixtures.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INDEX_HTML = join(__dirname, "..", "src", "index.html");
@@ -12,7 +24,45 @@ const INDEX_HTML = join(__dirname, "..", "src", "index.html");
 let server;
 let base;
 
+// --- Anthropic fetch mock -------------------------------------------------------------------
+// vision.js calls the SAME global `fetch` the tests use to talk to the local ephemeral server, so
+// the mock must only intercept requests to api.anthropic.com and pass everything else through to
+// the real fetch implementation.
+const realFetch = globalThis.fetch;
+let anthropicCallCount = 0;
+/** @type {(url: string, init: object) => Promise<{ok: boolean, status?: number, json: () => Promise<any>}>} */
+let anthropicImpl = defaultAnthropicImpl;
+
+/** Default stub: a usable estimate, so tests that don't care about the vision response still see AC1.1 behaviour. */
+function defaultAnthropicImpl() {
+  return Promise.resolve(jsonResponse({ food_identified: true, calories: 400 }));
+}
+
+/** Build a fetch-like Response stub carrying a structured-output text block. */
+function jsonResponse(structured, { ok = true, status = 200, stopReason = "end_turn" } = {}) {
+  return {
+    ok,
+    status,
+    json: async () => ({
+      stop_reason: stopReason,
+      content: [{ type: "text", text: JSON.stringify(structured) }],
+    }),
+  };
+}
+
+async function fetchDispatcher(url, init) {
+  const href = typeof url === "string" ? url : String(url);
+  if (href.includes("api.anthropic.com")) {
+    anthropicCallCount += 1;
+    return anthropicImpl(href, init);
+  }
+  return realFetch(url, init);
+}
+
 beforeAll(async () => {
+  vi.stubEnv("ANTHROPIC_API_KEY", "test-key-not-real");
+  vi.stubGlobal("fetch", fetchDispatcher);
+
   server = createServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
@@ -21,12 +71,21 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise((resolve) => server.close(resolve));
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
-// A tiny but non-empty "image" payload (bytes are all we check; MIME is from the header).
-const jpegBytes = () => new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+beforeEach(() => {
+  anthropicCallCount = 0;
+  anthropicImpl = defaultAnthropicImpl;
+  resetRateLimits(); // R9 — every test starts with a full call budget
+});
 
-describe("POST /upload", () => {
+// A structurally valid JPEG carrying EXIF/GPS — the metadata strip (R10) runs on the real bytes,
+// so the fixture has to actually parse as a JPEG.
+const jpegBytes = () => jpegWithExif();
+
+describe("POST /upload — 001 base contract", () => {
   it("AC1.2 — accepts a valid image and returns 200 with size + type", async () => {
     const body = jpegBytes();
     const res = await fetch(`${base}/upload`, {
@@ -103,6 +162,292 @@ describe("POST /upload", () => {
   });
 });
 
+describe("POST /upload — 002 Story 1: calorie estimate", () => {
+  it("AC1.1 — usable estimate is returned as calorieResult.status 'estimated' with a number", async () => {
+    anthropicImpl = () => Promise.resolve(jsonResponse({ food_identified: true, calories: 452 }));
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.ok).toBe(true);
+    expect(json.calorieResult).toEqual({ status: "estimated", calories: 452 });
+    expect(anthropicCallCount).toBe(1);
+  });
+
+  it("AC1.2 — non-2xx response from the model → calorieResult 'unavailable', no calorie number", async () => {
+    anthropicImpl = () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    expect(res.status).toBe(200); // the upload itself succeeded; the estimate did not
+    const json = await res.json();
+    expect(json.calorieResult).toEqual({ status: "unavailable" });
+    expect(json.calorieResult.calories).toBeUndefined();
+  });
+
+  it("AC1.2 — network error calling the model → calorieResult 'unavailable', no calorie number", async () => {
+    anthropicImpl = () => Promise.reject(new Error("fetch failed"));
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.calorieResult).toEqual({ status: "unavailable" });
+  });
+
+  it("AC1.2 — refusal stop_reason → calorieResult 'unavailable', no calorie number", async () => {
+    anthropicImpl = () =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ stop_reason: "refusal", content: [] }),
+      });
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    expect(json.calorieResult).toEqual({ status: "unavailable" });
+  });
+
+  it("AC1.2 — unparseable model reply → calorieResult 'unavailable', no calorie number", async () => {
+    anthropicImpl = () =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: "not valid json" }],
+        }),
+      });
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    expect(json.calorieResult).toEqual({ status: "unavailable" });
+  });
+});
+
+describe("POST /upload — 002 Story 2: raster-MIME allowlist ahead of the model", () => {
+  it("AC2.1 — a supported raster image (PNG) is forwarded to the vision model", async () => {
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/png" },
+      body: pngWithMetadata(), // must really BE a PNG — the R10 strip parses it before egress
+    });
+
+    expect(res.status).toBe(200);
+    expect(anthropicCallCount).toBe(1);
+  });
+
+  it("AC2.2 — image/svg+xml is rejected with 415 and NEVER reaches the model", async () => {
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/svg+xml" },
+      body: "<svg></svg>",
+    });
+
+    expect(res.status).toBe(415);
+    const json = await res.json();
+    expect(typeof json.error).toBe("string");
+    expect(anthropicCallCount).toBe(0);
+  });
+
+  it("AC2.2 — a degenerate non-raster image/* subtype is rejected with 415 and never reaches the model", async () => {
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/x-icon" },
+      body: new Uint8Array([1, 2, 3]),
+    });
+
+    expect(res.status).toBe(415);
+    expect(anthropicCallCount).toBe(0);
+  });
+
+  it("R10 — gif/webp are now rejected with 415 (we cannot provably strip their metadata)", async () => {
+    for (const mime of ["image/gif", "image/webp"]) {
+      const res = await fetch(`${base}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": mime },
+        body: new Uint8Array([1, 2, 3, 4]),
+      });
+      expect(res.status).toBe(415);
+    }
+    expect(anthropicCallCount).toBe(0);
+  });
+});
+
+describe("POST /upload — R9: vision-call cost guard (rate limit + concurrency)", () => {
+  it("returns 429 once one IP exceeds its per-window call budget, WITHOUT spending a call", async () => {
+    const send = () =>
+      fetch(`${base}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "image/jpeg" },
+        body: jpegBytes(),
+      });
+
+    // Spend exactly the budget — all of these are allowed to hit the model.
+    for (let i = 0; i < RATE_LIMIT_MAX_PER_WINDOW; i++) {
+      const res = await send();
+      expect(res.status).toBe(200);
+    }
+    expect(anthropicCallCount).toBe(RATE_LIMIT_MAX_PER_WINDOW);
+
+    // One more is refused BEFORE the API call — the call count must not move.
+    const denied = await send();
+    expect(denied.status).toBe(429);
+    const json = await denied.json();
+    expect(typeof json.error).toBe("string");
+    expect(json.calorieResult).toBeUndefined(); // no number, no fake estimate
+    expect(anthropicCallCount).toBe(RATE_LIMIT_MAX_PER_WINDOW); // nothing extra was spent
+  });
+
+  it("caps concurrent in-flight vision calls — the overflow request gets 429, not a model call", async () => {
+    // Hold every in-flight model call open until we say so.
+    let releaseAll;
+    const gate = new Promise((resolve) => {
+      releaseAll = resolve;
+    });
+    anthropicImpl = async () => {
+      await gate;
+      return jsonResponse({ food_identified: true, calories: 400 });
+    };
+
+    const send = () =>
+      fetch(`${base}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "image/jpeg" },
+        body: jpegBytes(),
+      });
+
+    // Fire one more than the concurrency cap, all at once.
+    const inFlight = [];
+    for (let i = 0; i < MAX_CONCURRENT_VISION_CALLS + 1; i++) inFlight.push(send());
+
+    // Let them all reach the handler: the ones that took a slot are now parked on the gate, and the
+    // overflow one has already been refused. THEN let the held model calls finish.
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
+    expect(anthropicCallCount).toBeLessThanOrEqual(MAX_CONCURRENT_VISION_CALLS); // cap held
+    releaseAll();
+
+    const responses = await Promise.all(inFlight);
+    const statuses = responses.map((r) => r.status);
+
+    expect(statuses).toContain(429); // the overflow request was refused, not queued
+    expect(statuses.filter((s) => s === 200).length).toBe(MAX_CONCURRENT_VISION_CALLS);
+    expect(anthropicCallCount).toBeLessThanOrEqual(MAX_CONCURRENT_VISION_CALLS);
+  });
+
+  it("a 429 is not a fabricated estimate — the client gets an error, never a number", async () => {
+    for (let i = 0; i < RATE_LIMIT_MAX_PER_WINDOW; i++) {
+      await fetch(`${base}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "image/jpeg" },
+        body: jpegBytes(),
+      });
+    }
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+    const json = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(json.ok).toBeUndefined();
+    expect(JSON.stringify(json)).not.toMatch(/calories/i);
+  });
+});
+
+describe("POST /upload — R10: the photo that egresses is stripped", () => {
+  it("the bytes sent to Anthropic carry no EXIF/GPS from the uploaded photo", async () => {
+    let sentBase64 = null;
+    anthropicImpl = (_url, init) => {
+      const body = JSON.parse(init.body);
+      sentBase64 = body.messages[0].content.find((b) => b.type === "image").source.data;
+      return Promise.resolve(jsonResponse({ food_identified: true, calories: 420 }));
+    };
+
+    const photo = jpegBytes();
+    expect(Buffer.from(photo).includes(SECRET_GPS_MARKER)).toBe(true); // the upload HAS GPS in it
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: photo,
+    });
+    expect(res.status).toBe(200);
+
+    const sent = Buffer.from(sentBase64, "base64");
+    expect(sent.includes(SECRET_GPS_MARKER)).toBe(false); // ...and the third party never saw it
+  });
+});
+
+describe("POST /upload — R15: implausible numbers fail closed", () => {
+  it("an absurd calorie value comes back as 'unavailable', never as a number", async () => {
+    anthropicImpl = () => Promise.resolve(jsonResponse({ food_identified: true, calories: 999999999 }));
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    expect(json.calorieResult).toEqual({ status: "unavailable" });
+    expect(json.calorieResult.calories).toBeUndefined(); // not clamped to a plausible-looking number
+  });
+});
+
+describe("POST /upload — 002 Story 3: no misleading numbers", () => {
+  it("AC3.1 — a non-food photo (food_identified:false) → calorieResult 'no_food', no calorie number", async () => {
+    anthropicImpl = () => Promise.resolve(jsonResponse({ food_identified: false, calories: null }));
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    expect(json.calorieResult).toEqual({ status: "no_food" });
+    expect(json.calorieResult.calories).toBeUndefined();
+  });
+
+  it("AC3.2 — two uploads of the same photo each make their own independent model call", async () => {
+    anthropicImpl = () => Promise.resolve(jsonResponse({ food_identified: true, calories: 300 }));
+    const body = jpegBytes();
+    const opts = { method: "POST", headers: { "Content-Type": "image/jpeg" }, body };
+
+    const first = await fetch(`${base}/upload`, opts);
+    const second = await fetch(`${base}/upload`, opts);
+
+    expect((await first.json()).calorieResult).toEqual({ status: "estimated", calories: 300 });
+    expect((await second.json()).calorieResult).toEqual({ status: "estimated", calories: 300 });
+    expect(anthropicCallCount).toBe(2); // never served from a single cached call
+  });
+});
+
 describe("GET / (served frontend)", () => {
   it("AC1.1 / AC1.3 — served HTML has file input, send control, and confirmation area", async () => {
     const res = await fetch(`${base}/`);
@@ -119,9 +464,24 @@ describe("GET / (served frontend)", () => {
 describe("AC2.5 — no secret in client code", () => {
   it("served index.html contains no API key / secret", async () => {
     const html = await readFile(INDEX_HTML, "utf8");
-    // No Anthropic-style key, no generic secret assignment.
+    // No Anthropic-style key, no key-shaped identifier, no env var name.
     expect(html).not.toMatch(/sk-[a-zA-Z0-9-]{10,}/);
     expect(html).not.toMatch(/api[_-]?key/i);
-    expect(html).not.toMatch(/anthropic/i);
+    expect(html).not.toMatch(/ANTHROPIC_API_KEY/);
+    // NOTE: this used to also forbid /anthropic/i outright. R10(b) requires the page to NAME the
+    // third party the photo is sent to, so the vendor's name is now expected in the copy. The scan
+    // above still catches an actual key/secret, which is what AC2.5 is really about.
+  });
+});
+
+describe("R10(b) — the user is told the photo leaves the machine", () => {
+  it("served index.html carries a plain-language third-party notice", async () => {
+    const res = await fetch(`${base}/`);
+    const html = await res.text();
+
+    expect(html).toContain('data-testid="privacy-notice"');
+    expect(html).toMatch(/sent to Anthropic/i); // names the third party
+    expect(html).toMatch(/metadata are removed/i); // says what we strip
+    expect(html).toMatch(/is stored here/i); // says nothing is retained
   });
 });
