@@ -35,9 +35,22 @@
 | 2026-07-13 | 003 | qa | Haiku | 48,415 | risk-driven test cases; 24-case Playwright tier specified, not implemented this run |
 | 2026-07-13 | 003 | delivery-pm | Sonnet | ~55,000 (est.) | wrap: 99-status.md + manifest v0.3.0 + build-log + dev-cost; not precisely self-metered, estimated from context volume (read the full feature folder incl. 55-review.md + 60-test-cases.md + 40-design-changes.md) |
 | 2026-07-13 | 003 | **TOTAL** | — | **~516,800** | 8 subagents (7 metered + 1 estimated); orchestrator tokens not included |
+| 2026-07-13 | 007 | kickoff | Haiku | 43,503 | brief + roadmap flip |
+| 2026-07-13 | 007 | prod-ba | Sonnet | 70,189 | 6 stories (incl. AI Eval Card), ACs + PRD; untrusted-text posture scoped |
+| 2026-07-13 | 007 | architecture | Opus | 84,229 | verified structured-outputs schema constraints (enum vs. length/range) against claude-api reference; no new ADR |
+| 2026-07-13 | 007 | engineering | Sonnet | 361,025 | vision.js schema expansion + validators + MAX_TOKENS bump, server.js additive spread, index.html pill/tile wiring; ~20 new vision.test.js cases + upload.test.js extension; 95 tests green |
+| 2026-07-13 | 007 | reviewer | Opus | 92,157 | isolated Tier-A review; 0 major, 1 minor-security (F1) + 3 minor (F2-F4) + 1 nit (F5) |
+| 2026-07-13 | 007 | qa | Haiku | 48,792 | 51 risk-driven test cases (34 negatives); Playwright browser-E2E tier recommended for new render paths |
+| 2026-07-13 | 007 | threat-model | Opus | 93,747 | STRIDE delta + OWASP-LLM + trifecta pass over the new free-text render surface; R16/R18 (new), R17/R19 scored |
+| 2026-07-13 | 007 | delivery-pm | Sonnet | ~70,000 (est.) | wrap: 99-status.md + manifest v0.4.0 + build-log + dev-cost + build-note F3 correction; not precisely self-metered, estimated from context volume (read the full feature folder incl. 70-threats.md + 55-review.md + 60-test-cases.md + manifest + build-log + source files) |
+| 2026-07-13 | 007 | **TOTAL** | — | **~863,600** | 8 subagents (7 metered + 1 estimated); orchestrator tokens not included |
 
 **Running comparison across features:** 001 ≈235k tokens (8 subagents, new service from scratch) →
 002 ≈1.40M tokens (11 subagents, vision-model integration + 2 rounds of security-driven fixes/re-review
 — by far the most expensive feature so far) → 003 ≈517k tokens (8 subagents, frontend-only visual
 rebuild — roughly a third of 002's cost, consistent with "no server/API change, no new ADR, single
-review pass with 0 majors").
+review pass with 0 majors") → 007 ≈864k tokens (8 subagents, same-call schema expansion + first
+untrusted-text render surface — costlier than 003 due to the security-driven validation/test surface
+(engineering + reviewer + threat-model all substantial) but well under 002's two-round security-fix
+cost, consistent with "additive schema change, no new call/model/dependency, single review pass with
+0 majors").

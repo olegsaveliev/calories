@@ -448,6 +448,160 @@ describe("POST /upload — 002 Story 3: no misleading numbers", () => {
   });
 });
 
+describe("POST /upload — 007: food ID + confidence (end-to-end contract)", () => {
+  it("AC1.1/AC6.4 — a valid reply carries foodName/confidence/itemsCount alongside calories, additively", async () => {
+    anthropicImpl = () =>
+      Promise.resolve(
+        jsonResponse({
+          food_identified: true,
+          calories: 480,
+          food_name: "Grilled salmon with rice",
+          confidence: "high",
+          items_count: 3,
+        }),
+      );
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    // ok/size/type byte-for-byte unchanged (AC6.4).
+    expect(json.ok).toBe(true);
+    expect(typeof json.size).toBe("number");
+    expect(json.type).toBe("image/jpeg");
+    expect(json.calorieResult).toEqual({
+      status: "estimated",
+      calories: 480,
+      foodName: "Grilled salmon with rice",
+      confidence: "high",
+      itemsCount: 3,
+    });
+    expect(anthropicCallCount).toBe(1); // AC1.3 — still exactly one round-trip
+  });
+
+  it("AC6.1 — a fully-degraded reply (all three invalid) still renders the calorie estimate, old shape preserved", async () => {
+    anthropicImpl = () =>
+      Promise.resolve(
+        jsonResponse({
+          food_identified: true,
+          calories: 300,
+          food_name: null,
+          confidence: "extremely high", // off-enum
+          items_count: -1, // out of range
+        }),
+      );
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    // Byte-identical to the pre-007 shape: no foodName/confidence/itemsCount keys present at all.
+    expect(json.calorieResult).toEqual({ status: "estimated", calories: 300 });
+    expect(Object.keys(json.calorieResult).sort()).toEqual(["calories", "status"]);
+  });
+
+  it("AC2.3/AC5.1 — an over-length food_name is omitted entirely, never truncated", async () => {
+    const overLong = "a".repeat(61); // MAX_FOOD_NAME_LENGTH is 60
+    anthropicImpl = () =>
+      Promise.resolve(
+        jsonResponse({
+          food_identified: true,
+          calories: 250,
+          food_name: overLong,
+          confidence: "low",
+          items_count: 2,
+        }),
+      );
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    expect(json.calorieResult.foodName).toBeUndefined();
+    expect(JSON.stringify(json.calorieResult)).not.toContain("a".repeat(61));
+    // The other two fields are unaffected by foodName's rejection (independent per-field degrade).
+    expect(json.calorieResult.confidence).toBe("low");
+    expect(json.calorieResult.itemsCount).toBe(2);
+  });
+
+  it("AC4.2 — an off-enum confidence value is omitted, never defaulted", async () => {
+    anthropicImpl = () =>
+      Promise.resolve(
+        jsonResponse({
+          food_identified: true,
+          calories: 250,
+          food_name: "Soup",
+          confidence: "Medium", // wrong case — not exactly "low"|"medium"|"high"
+          items_count: 1,
+        }),
+      );
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    expect(json.calorieResult.confidence).toBeUndefined();
+    expect(json.calorieResult.foodName).toBe("Soup");
+  });
+
+  it("AC3.2 — an out-of-range itemsCount is omitted, never clamped", async () => {
+    anthropicImpl = () =>
+      Promise.resolve(
+        jsonResponse({
+          food_identified: true,
+          calories: 250,
+          food_name: "Soup",
+          confidence: "medium",
+          items_count: 51, // one over MAX_PLAUSIBLE_ITEMS
+        }),
+      );
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    expect(json.calorieResult.itemsCount).toBeUndefined();
+  });
+
+  it("AC1.4/AC1.5/AC2.5 — no_food / unavailable never carry any of the three new fields", async () => {
+    anthropicImpl = () =>
+      Promise.resolve(
+        jsonResponse({
+          food_identified: false,
+          calories: null,
+          food_name: "Something",
+          confidence: "high",
+          items_count: 5,
+        }),
+      );
+
+    const res = await fetch(`${base}/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "image/jpeg" },
+      body: jpegBytes(),
+    });
+
+    const json = await res.json();
+    expect(json.calorieResult).toEqual({ status: "no_food" });
+  });
+});
+
 describe("GET / (served frontend) — 003 Midnight Lime rebuild", () => {
   it("AC1.1/AC1.2/AC8.2 — Pick screen: keyboard-operable dropzone as the file-input target, narrowed to JPEG/PNG", async () => {
     const res = await fetch(`${base}/`);
@@ -500,20 +654,31 @@ describe("GET / (served frontend) — 003 Midnight Lime rebuild", () => {
     expect(html).toContain('data-testid="result-photo"');
   });
 
-  it("AC3.2 — the unimplemented 007 fields (food name, ± range, items/confidence) are never hardcoded demo values", async () => {
+  it("007 — the food-name pill and both stat tiles are wired (present, hidden/neutral by default), never hardcoded demo values", async () => {
     const html = await readFile(INDEX_HTML, "utf8");
 
-    // The mock's demo values must never appear anywhere in the shipped markup/script.
+    // The mock's demo values must NEVER appear anywhere in the shipped markup/script, even though
+    // the fields themselves are now wired — a real value only ever comes from the model response
+    // at runtime, never from a literal in the page (revises the 003 negative assertion per
+    // 30-design.md's closing note / AC6.3 — this was always scoped "until 007 wires these fields").
     expect(html).not.toMatch(/642/);
     expect(html).not.toMatch(/grilled chicken bowl/i);
     expect(html).not.toMatch(/3\s*items seen/i); // no hardcoded item count
-    expect(html).not.toMatch(/±\s?\d/); // no "± NN" range anywhere
+    expect(html).not.toMatch(/±\s?\d/); // no "± NN" range anywhere — still out of scope
     expect(html).not.toMatch(/high confidence/i);
-    // Food-name pill is omitted entirely (30-design.md §4) — no such DOM hook exists.
-    expect(html).not.toMatch(/data-testid="food-name/i);
-    expect(html).not.toMatch(/class="food-name/i);
 
-    // The two stat tiles are present for layout fidelity but rendered as an explicit neutral "—".
+    // The food-name pill DOM hook now exists, ships hidden by default (AC2.2 — omitted, not an
+    // empty pill), and is populated exclusively via textContent (never innerHTML/insertAdjacentHTML
+    // — AC2.4/AC5.2/AC5.5).
+    const pillMatch = html.match(/<div[^>]*data-testid="food-name-pill"[^>]*>/);
+    expect(pillMatch).not.toBeNull();
+    expect(pillMatch[0]).toContain("hidden");
+    // Real usage, not just the word appearing in a comment discussing why it's avoided.
+    expect(html).not.toMatch(/\.innerHTML\s*=/);
+    expect(html).not.toMatch(/\.insertAdjacentHTML\s*\(/);
+
+    // The two stat tiles are present, ship as the neutral "—" in the static markup (the real value
+    // is written in by the script at runtime — AC3.1/AC3.3/AC4.1/AC4.3).
     expect(html).toContain('data-testid="stat-value-1"');
     expect(html).toContain('data-testid="stat-value-2"');
     const statValues = [...html.matchAll(/data-testid="stat-value-\d"[^>]*>([^<]*)</g)].map((m) => m[1].trim());

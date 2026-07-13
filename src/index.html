@@ -361,6 +361,24 @@
       display: block;
     }
 
+    /* 007 — food-name pill, overlaid bottom-left on the photo thumbnail (design handoff README
+       "Screen 2" §2 / 30-design.md §8). textContent-only (no innerHTML) — see the script below. */
+    .food-name-pill {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      max-width: calc(100% - 24px);
+      padding: 5px 11px;
+      border-radius: 20px;
+      background: rgba(10, 11, 13, .7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 12px;
+    }
+
     .hero-block {
       flex: 1;
       display: flex;
@@ -610,14 +628,19 @@
 
       <div class="photo-thumb">
         <img id="result-photo" data-testid="result-photo" alt="Your submitted photo" />
+        <!-- 007 — food-name pill: hidden by default, unhidden + populated via textContent ONLY
+             when calorieResult.foodName is a valid non-empty string (30-design.md §8). Omitted
+             entirely (stays hidden, no placeholder text) if absent/invalid. -->
+        <div class="food-name-pill" id="food-name-pill" data-testid="food-name-pill" hidden></div>
       </div>
 
       <div class="hero-block">
         <div class="ring ring-outer" aria-hidden="true"></div>
         <div class="ring ring-inner" aria-hidden="true"></div>
 
-        <!-- done state: eyebrow + hero number + caption. No food-name pill, no "± NN" range —
-             feature 007 fields are out of scope here (AC3.2) and are never fabricated. -->
+        <!-- done state: eyebrow + hero number + caption. No "± NN" range — still out of scope
+             (30-design.md), never fabricated. The hero number's own render path has zero
+             dependency on the 007 fields (AC6.1). -->
         <div id="hero-number" data-testid="hero-number" hidden>
           <div class="eyebrow">Estimated</div>
           <div class="hero-value" id="hero-value" data-testid="hero-value"></div>
@@ -633,15 +656,17 @@
         </div>
       </div>
 
-      <!-- Feature 007 stat tiles neutralised honestly per 30-design.md §4: rendered as an
-           explicit neutral "—", never a hardcoded/computed-looking demo value. -->
+      <!-- 007 — stat tiles wired to itemsCount / confidence. Structure/spacing/labels unchanged
+           from 003 (AC3.3/AC4.3); only the value content changes based on data availability. Each
+           tile independently falls back to the neutral "—" (never 0, never a best-guess default)
+           when its field is absent/invalid — see render() below. -->
       <div class="stat-tiles">
         <div class="stat-tile" data-testid="stat-tile-1">
-          <div class="stat-value" data-testid="stat-value-1">—</div>
+          <div class="stat-value" id="stat-value-1" data-testid="stat-value-1">—</div>
           <div class="stat-label">items seen</div>
         </div>
         <div class="stat-tile" data-testid="stat-tile-2">
-          <div class="stat-value" data-testid="stat-value-2">—</div>
+          <div class="stat-value" id="stat-value-2" data-testid="stat-value-2">—</div>
           <div class="stat-label">confidence</div>
         </div>
       </div>
@@ -660,10 +685,12 @@
   <script>
     // 003 — Midnight Lime frontend state machine: idle -> selected -> estimating -> done|error,
     // and back to idle via "New photo" / the back chevron. Pure in-page state, one in-memory model
-    // ({ status, file, previewUrl, calories, errorReason }); no router, no history entries
-    // (30-design.md §1). ADR-002 preserved verbatim: raw file bytes as the POST /upload body, MIME
-    // in Content-Type. Model-derived/dynamic text is set via textContent only, never innerHTML
-    // (keeps the 001 XSS posture — 30-design.md §2).
+    // ({ status, file, previewUrl, calories, errorReason } — 007 adds foodName/confidenceLevel/
+    // itemsCount); no router, no history entries (30-design.md §1). ADR-002 preserved verbatim: raw
+    // file bytes as the POST /upload body, MIME in Content-Type. Model-derived/dynamic text
+    // (including the 007 food-name pill, the first free text this app has ever surfaced) is set via
+    // textContent only, never innerHTML/insertAdjacentHTML (keeps the 001 XSS posture — 30-design.md
+    // §2/§8).
     (function () {
       const screenPick = document.getElementById('screen-pick');
       const screenResult = document.getElementById('screen-result');
@@ -684,7 +711,14 @@
       const tryAgainButton = document.getElementById('try-again-button');
       const newPhotoButton = document.getElementById('new-photo-button');
 
+      // 007 — food-name pill + stat-tile DOM hooks.
+      const foodNamePill = document.getElementById('food-name-pill');
+      const statValueItems = document.getElementById('stat-value-1');
+      const statValueConfidence = document.getElementById('stat-value-2');
+
       const SUPPORTED_TYPES = ['image/jpeg', 'image/png'];
+      const CONFIDENCE_LEVELS = ['low', 'medium', 'high'];
+      const CONFIDENCE_LABELS = { low: 'Low', medium: 'Medium', high: 'High' };
 
       /** @type {'idle'|'selected'|'estimating'|'done'|'error'} */
       let state = 'idle';
@@ -693,6 +727,14 @@
       let calories = null;
       /** @type {'no_food'|'unavailable'|null} */
       let errorReason = null;
+      // 007 — each independently null unless the server validated it on THIS estimate (never
+      // carried over from a stale prior 'done' — reset alongside calories/errorReason below).
+      /** @type {string|null} */
+      let foodName = null;
+      /** @type {'low'|'medium'|'high'|null} */
+      let confidenceLevel = null;
+      /** @type {number|null} */
+      let itemsCount = null;
 
       function isAllowedFile(file) {
         return !!file && SUPPORTED_TYPES.includes(file.type);
@@ -720,6 +762,14 @@
         }
 
         // --- Result screen ---
+        // 007 — reset all three fields to neutral FIRST, unconditionally, so a stale value from a
+        // prior 'done' can never leak into estimating/error/no_food or a fresh Try-again/New-photo
+        // render (AC2.5/AC6.2). Only the `done` branch below may repopulate them.
+        foodNamePill.hidden = true;
+        foodNamePill.textContent = '';
+        statValueItems.textContent = '—';
+        statValueConfidence.textContent = '—';
+
         if (!isPick) {
           resultPhoto.src = previewUrl || '';
           const loading = state === 'estimating';
@@ -730,7 +780,26 @@
           heroNumber.hidden = !done;
           errorBox.hidden = !errored;
 
-          if (done) heroValue.textContent = String(calories);
+          if (done) {
+            heroValue.textContent = String(calories);
+
+            // Food-name pill — independent per-field degrade: omitted (stays hidden, no
+            // placeholder) unless foodName is a real, non-empty string (AC2.1/AC2.2).
+            if (typeof foodName === 'string' && foodName.length > 0) {
+              foodNamePill.textContent = foodName;
+              foodNamePill.hidden = false;
+            }
+
+            // Items-seen tile (AC3.1/AC3.2) — never 0 as a fallback, only a genuine validated count.
+            if (Number.isInteger(itemsCount) && itemsCount >= 0) {
+              statValueItems.textContent = String(itemsCount);
+            }
+
+            // Confidence tile (AC4.1/AC4.2) — never a best-guess default.
+            if (CONFIDENCE_LEVELS.includes(confidenceLevel)) {
+              statValueConfidence.textContent = CONFIDENCE_LABELS[confidenceLevel];
+            }
+          }
           if (errored) errorText.textContent = errorMessageFor(errorReason);
 
           // AC5.4 — "New photo" / back are only reachable from done/error, never mid-flight, so no
@@ -759,6 +828,9 @@
         previewUrl = null;
         calories = null;
         errorReason = null;
+        foodName = null;
+        confidenceLevel = null;
+        itemsCount = null;
         state = 'idle';
         fileInput.value = '';
         render();
@@ -788,19 +860,35 @@
           const cr = data && data.calorieResult;
           if (res.ok && data && data.ok && cr && cr.status === 'estimated' && Number.isFinite(cr.calories)) {
             calories = cr.calories;
+            // 007 — each field independently re-validated client-side (the server already
+            // validated/omitted them; this is a defensive re-check, never trusting the payload
+            // blindly). Any field the server omitted, or that fails this re-check, stays null and
+            // renders as neutral (AC2.2/AC3.2/AC4.2).
+            foodName = typeof cr.foodName === 'string' && cr.foodName.length > 0 ? cr.foodName : null;
+            confidenceLevel = CONFIDENCE_LEVELS.includes(cr.confidence) ? cr.confidence : null;
+            itemsCount = Number.isInteger(cr.itemsCount) && cr.itemsCount >= 0 ? cr.itemsCount : null;
             state = 'done';
           } else if (cr && cr.status === 'no_food') {
             errorReason = 'no_food';
+            foodName = null;
+            confidenceLevel = null;
+            itemsCount = null;
             state = 'error';
           } else {
             // Covers "unavailable", non-2xx (incl. 415/429), unparseable body, or any other
             // response shape that isn't a usable estimate — never a fabricated number (AC2.4).
             errorReason = 'unavailable';
+            foodName = null;
+            confidenceLevel = null;
+            itemsCount = null;
             state = 'error';
           }
         } catch {
           // Network error / timeout.
           errorReason = 'unavailable';
+          foodName = null;
+          confidenceLevel = null;
+          itemsCount = null;
           state = 'error';
         }
 

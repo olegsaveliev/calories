@@ -2,6 +2,8 @@
 // Roles (ADR-001): (1) serve the browser frontend, (2) own the ONE upload endpoint.
 // Transport (ADR-002): the image arrives as the RAW request body; MIME = Content-Type header.
 // Built-in http + fs only — no framework, no runtime dependency.
+// Feature 007 grows calorieResult additively (foodName/confidence/itemsCount, omit-on-absent) —
+// see the comment above the calorieResult assignment in handleUpload below.
 
 import http from "node:http";
 import { readFile } from "node:fs/promises";
@@ -152,9 +154,19 @@ async function handleUpload(req, res) {
     slot.release(); // always give the in-flight slot back, success or throw
   }
 
+  // 007 — grow calorieResult additively on the "estimated" branch only. Each new field is present
+  // ONLY if estimateCalories already validated it (omit-on-absent — never send `foodName: null`),
+  // so a response where all three degraded is byte-identical to a pre-007 response (AC6.1/AC6.4).
+  // The no_food/unavailable shapes are completely unchanged.
   const calorieResult =
     result.status === "estimated"
-      ? { status: "estimated", calories: result.calories }
+      ? {
+          status: "estimated",
+          calories: result.calories,
+          ...("foodName" in result ? { foodName: result.foodName } : {}),
+          ...("confidence" in result ? { confidence: result.confidence } : {}),
+          ...("itemsCount" in result ? { itemsCount: result.itemsCount } : {}),
+        }
       : { status: result.status };
 
   sendJson(res, 200, { ok: true, size: body.length, type: mime, calorieResult });
