@@ -3,6 +3,42 @@
 > One entry per delivered feature / fixed bug, newest at the top. Written by `delivery-pm` (wrap) and
 > `bugfix`. This is the narrative history; `manifest.md` is the current state.
 
+## 2026-07-13 — 003 Redesign — "Midnight Lime" two-screen UI rebuild (v0.3.0)
+- Full **frontend-only** rebuild of `src/index.html`: a Pick screen (dropzone + privacy notice +
+  disabled-until-selected CTA) and a Result screen (photo thumbnail + animated-ring hero calorie
+  number + reset), driven by a single 5-state vanilla-JS state machine (`idle → selected →
+  estimating → done | error → idle`). Inline CSS custom properties carry every "Midnight Lime"
+  design token; Google Fonts `<link>` for Space Grotesk/Manrope (static asset, not a dependency).
+  Zero new runtime deps, no framework/build tool (ADR-001 upheld); no new ADR needed (architecture
+  step confirmed both ADR-001 and ADR-002 hold unchanged). **The server, the vision-model call, and
+  the `POST /upload` contract are byte-for-byte unchanged** — `server.js`, `vision.js`,
+  `rate-limit.js`, `strip-metadata.js` not touched.
+- **Scope (human-confirmed):** wires only the total-calorie number from the existing `calorieResult`.
+  Every feature-007 field the design mock shows with demo values (food-name pill, "± NN" range,
+  items-seen/confidence tiles) is honestly neutralized — pill omitted, "± NN" dropped, tiles render
+  a literal "—" — never fabricated. Verified by a dedicated negative-assertion test and independent
+  review.
+- ux-design pass: fixed a real WCAG AA contrast failure (`--dim` `#6B7280` ≈4.05:1 on `#0A0B0D`, fails
+  the 4.5:1 bar for its 11–13px usages → `#7A808D` ≈4.95:1, passes with margin — review independently
+  re-derived the arithmetic and confirmed it), corrected a secondary-CTA border token copied from the
+  wrong hairline value, and added a `prefers-reduced-motion` guard on the two looping animations.
+  Keyboard-operable dropzone, visible focus rings, ≥44×44px tap targets all confirmed.
+- Review: **PASS**, Tier A (independent, fresh subagent), 0 major, 1 minor (F1: no client-side fetch
+  timeout — a stalled/half-open connection strands the user on the loading skeleton with no reachable
+  control until the browser's own timeout fires; AC4.2 names "timed out" as a trigger but nothing
+  client-side implements it) + 2 nits (F2: bypassed-415 shows a generic message instead of the design's
+  distinct "unsupported file type" copy; F3: benign non-idiomatic `role="button"` ARIA nesting on the
+  dropzone). All three logged as known limitations, not fixed this run.
+- QA: current tier is 73 passing static-HTML shape assertions only — the entire client-side state
+  machine (transitions, double-submit guard, result mapping, object-URL lifecycle, drag-drop,
+  keyboard, animations) is untested by anything that drives a browser. QA specified a 24-case
+  Playwright tier. **Human decision: ship 003 now; Playwright + the F1 timeout fix queued as follow-up
+  roadmap 008.**
+- Tests: 73 passing (up from 70 in 002; all pre-existing 001/002 suites pass unmodified). Lint clean.
+- Note: the dev `ANTHROPIC_API_KEY` still hasn't been re-verified live end-to-end (credit-balance gap
+  from 002 carries forward) — fail-closed paths are verified by tests; not a code defect.
+- PR/commit: not created by this wrap step (orchestrator-owned) · Issue: (roadmap 003)
+
 ## 2026-07-13 — 002 Calorie estimate (v0.2.0)
 - Plugged a vision-model call into the existing `POST /upload` route: photo → server-side Anthropic
   call (`claude-sonnet-5`, human-picked) → structured `{food_identified, calories}` → browser renders
