@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Calories — estimate the calories in a meal from a photo. Node service (frontend + one vision-model API route).",
   "scripts": {
+    "start": "node src/server.js",
     "lint": "eslint .",
     "test": "vitest run"
   },

@@ -12,6 +12,9 @@ export default [
         // Node globals used by app/test code
         process: "readonly",
         console: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        fetch: "readonly",
       },
     },
     rules: {
