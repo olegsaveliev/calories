@@ -5,7 +5,7 @@
 > The LAST step of every feature run (delivery-pm / wrap) updates this file.
 
 **Last updated:** 2026-07-13
-**Current version:** 0.2.0
+**Current version:** 0.3.0
 
 ## Features that exist right now
 
@@ -13,6 +13,7 @@
 |-----|-------------------|-----------|------------|------------------------------------|
 | 001 | Initial prototype | delivered | 2026-07-13 | `features/001-initial-prototype/`  |
 | 002 | Calorie estimate  | delivered | 2026-07-13 | `features/002-calorie-estimate/`   |
+| 003 | Redesign (Midnight Lime UI) | delivered | 2026-07-13 | `features/003-redesign/` |
 
 ## Live surfaces (files that make up the running app)
 - `src/server.js` — the single Node service (built-in `http` + `fs`, ESM, no runtime dep). Exports
@@ -36,16 +37,36 @@
   JPEG and PNG; exports `stripImageMetadata(buffer, mime)` → stripped `Buffer` or `null` (fail-closed
   if it can't be provably stripped). **Known partial-closure bug (JPEG data after EOI)** — see Known
   limitations.
-- `src/index.html` — upload UI: file picker (`<input type="file" accept="image/*">` — not yet narrowed
-  to reflect the JPEG/PNG-only backend, see known limitations) + send button + a `textContent` result
-  area. Now (002) branches on `calorieResult.status` to render "~N calories" / "couldn't identify a
-  meal" / "couldn't estimate calories" / "unsupported file type", and carries a one-line privacy
-  notice (`data-testid="privacy-notice"`) that the photo is sent to Anthropic's model and metadata is
-  stripped first.
+- `src/index.html` — **rebuilt in 003** into the "Midnight Lime" two-screen UI: a **Pick** screen
+  (logo header, "Snap it. Count it." heading, a dashed dropzone that doubles as a real
+  `<input type="file" accept="image/jpeg,image/png">` file trigger with preview-on-select/drag-drop,
+  the privacy note, and an "Estimate calories" CTA disabled until a photo is chosen) and a **Result**
+  screen (back header, submitted-photo thumbnail, animated-ring hero block, "New photo" reset). Single
+  in-page 5-state vanilla-JS state machine (`idle → selected → estimating → done | error → idle`),
+  driven by one in-memory model (`state, currentFile, previewUrl, calories, errorReason`) toggling
+  sibling `<section data-screen="pick"|"result">`s via the `hidden` attribute — no router, no framework
+  (ADR-001 upheld). All Midnight Lime design tokens (colors, Space Grotesk/Manrope typography, radii,
+  the `ringPulse` animation) live as CSS custom properties in one inline `<style>` block; Space
+  Grotesk/Manrope load via a Google Fonts `<link>` (static asset, not a runtime dep) with a system-font
+  fallback. **Wires only the total-calorie number** from the existing `calorieResult` — every other
+  field the design mock shows (food-name pill, "± NN" range, items-seen/confidence tiles) belongs to
+  feature 007 and is honestly neutralized (pill omitted, "± NN" dropped, tiles render a literal "—"),
+  never fabricated. All response-derived text still reaches the DOM via `textContent` only (no
+  `innerHTML`), preserving the 001/002 XSS posture. Keyboard-operable dropzone (Enter/Space opens the
+  file picker), visible `:focus-visible` rings on every control, ≥44×44px tap targets, and a
+  `prefers-reduced-motion` guard on the two looping animations are all built in.
+  **`src/server.js`, `src/vision.js`, `src/rate-limit.js`, `src/strip-metadata.js` and the
+  `POST /upload` contract are UNCHANGED by 003 — this was a frontend-only visual/structural rebuild.**
 - `tests/upload.test.js` — Vitest integration suite (mounts `createServer()` on port 0, hits it with
   real HTTP; covers every server AC + a cap boundary test + the AC2.5 secret scan + (002) the vision
   call, MIME allowlist, rate-limit, and metadata-strip paths end-to-end, with `api.anthropic.com`
-  intercepted by a `fetch` dispatcher and everything else passed through).
+  intercepted by a `fetch` dispatcher and everything else passed through). **(003)** gained static-HTML
+  shape-assertions for the rebuilt frontend: both screens present, narrowed
+  `accept="image/jpeg,image/png"`, CTA disabled-by-default with `aria-disabled`, hero/error/back/
+  new-photo/try-again hooks present, stat tiles render only "—", and an explicit negative assertion
+  that none of the feature-007 demo values (642 / "Grilled chicken bowl" / "± NN" / "3 items seen" /
+  "High confidence") appear anywhere in the shipped file. These are static-markup assertions only — the
+  client-side state machine itself is not browser-exercised (see Known limitations).
 - `tests/vision.test.js` (new, 002) — unit tests for `estimateCalories`/`isSupportedRasterMime`
   (request shape, all fail-closed branches, the R15 plausibility band, R10 egress assertions).
 - `tests/rate-limit.test.js` (new, 002) — per-IP cap, per-IP isolation, window rollover, concurrency
@@ -101,11 +122,16 @@ _(one-liner here → full reasoning + rejected alternatives in `decisions/`)_
   jpeg/png/gif/webp — GIF/WebP can't be EXIF-stripped dependency-free). Reversible: restoring GIF/WebP
   needs either a full metadata-strip implementation for those formats or an ADR to adopt an
   image-processing dependency.
+- **003 redesign — no new ADR** (architecture step confirmed both ADR-001 and ADR-002 hold unchanged):
+  the two-screen "Midnight Lime" rebuild stays a single-document view toggle inside the one existing
+  `src/index.html` (no second static route, no framework, no build tool), inline CSS/JS, and the same
+  raw-binary `POST /upload` call the page already made. A Google Fonts `<link>` was adopted as a
+  reversible static-asset load, not a dependency. See `features/003-redesign/30-design.md`.
 
 ## Known limitations / tech debt
 
-**Hard gate (unchanged, now MORE ACUTE and with more items folded in) — MUST resolve before any exposure
-beyond localhost:**
+**Hard gate (unchanged by 003 — this was a frontend-only rebuild that never touched the server) — MUST
+resolve before any exposure beyond localhost:**
 - **R1 concurrency memory / R2 slow-loris** (threat-model High, carried from 001, worse since 002): the
   per-request 10 MB cap does NOT bound aggregate in-flight memory, and there are no inbound request
   timeouts. Since 002, each in-flight request also holds the image buffer's base64 copy + serialised
@@ -144,13 +170,36 @@ beyond localhost:**
 - **F6 (002 review-2, minor, correctness).** Fixed-window rate limiting allows ~2x the nominal rate
   briefly across a window boundary (e.g. 10 calls just before a minute rolls + 10 just after = 20 in
   ~10ms). Acceptable for a cost-guard prototype; a sliding window or token bucket would remove it.
-- **UI copy (002, cosmetic).** `src/index.html`'s file input still has `accept="image/*"` and the copy
-  doesn't state the JPEG/PNG-only limit up front — a user can pick a GIF/WebP/HEIC file and only learns
-  it's unsupported via the 415 response.
-- **Frontend behaviour still not E2E-tested:** the upload click→fetch→result render (including the three
-  002 branches — estimate / no_food / unavailable) is covered only by static-HTML shape assertions +
-  one-off live manual verification, not an automated browser test. QA's test-tier trigger flags
-  Playwright as warranted now that the app renders a model-derived result the user reads.
+- **UI copy (002, cosmetic) — CLOSED by 003.** `src/index.html`'s file input is now narrowed to
+  `accept="image/jpeg,image/png"` (was `image/*`); a user picking a GIF/WebP/HEIC file client-side now
+  gets no preview and an inert CTA instead of learning it's unsupported only via the 415 response. The
+  server-side 415 allowlist remains the authoritative backstop for a bypassed client guard.
+- **Frontend behaviour still not E2E-tested (carried forward from 002, now larger surface area after
+  003).** The redesign's entire client-side state machine — the 5-state transitions, the double-submit
+  guard (AC2.2), the `calorieResult` → view mapping, object-URL create/revoke lifecycle, drag-and-drop,
+  keyboard dropzone activation, the ring/skeleton animations and their `prefers-reduced-motion` guard,
+  and the "Try again" re-submit path — is covered only by static-HTML string assertions in
+  `tests/upload.test.js`, not by a running browser. QA specified a 24-case Playwright tier for exactly
+  this surface. **Human decision: ship 003 now; Playwright queued as follow-up roadmap 008.**
+- **003 review F1 (minor, deferred to 008) — no client-side fetch timeout.** `src/index.html`'s
+  `submitEstimate` has no `AbortController`/timeout on its `fetch('/upload', …)`. During `estimating`,
+  every reset control (back/New-photo/Try-again) is deliberately hidden, so the only ways out are the
+  `fetch` resolving or rejecting. Ordinary failures are fine (a refused connection rejects → `error`;
+  a live-but-slow server self-aborts at its own 30s ceiling → `unavailable` → `error`), but a stalled/
+  half-open socket (server dies mid-response, connection black-holes) produces neither event promptly —
+  the user is stuck on the pulsing skeleton with no reachable control until the browser's own default
+  network timeout eventually fires. AC4.2 names "request timed out" as an error trigger, but no
+  client-side timeout implements it today. Not an integrity/fabrication issue (no number is ever shown
+  here). To be fixed alongside the Playwright follow-up (roadmap 008).
+- **003 review F2 (nit, accepted).** A bypassed 415 (client `accept` guard defeated via devtools/direct
+  request) renders the generic "Couldn't estimate calories — try again" message instead of the distinct
+  "unsupported file type" copy the design handoff called for. Not an AC failure — the server still
+  returns 415 correctly (AC7.2) — just a design-note fidelity deviation, logged as a conscious choice.
+- **003 review F3 (nit, accepted).** The Pick screen's dropzone container carries `role="button"` while
+  wrapping a focusable `<input type="file">` and an `<img>` — non-idiomatic ARIA (a button shouldn't
+  contain other interactive descendants). Benign in practice: the input is `tabindex="-1"
+  aria-hidden="true"`, correctly excluded from the tab order and the accessibility tree; the dropzone
+  itself is the intended focusable proxy (AC8.2).
 - **Large-but-valid photos may silently never estimate (002 review, minor, m2):** a photo up to the
   10 MB upload cap, once base64-encoded (~1.33x), may exceed the Anthropic API's per-image size limit
   (commonly cited ~5 MB base64, i.e. ~3.75 MB raw) — a class of realistic modern phone photos. This

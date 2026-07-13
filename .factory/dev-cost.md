@@ -26,3 +26,18 @@
 | 2026-07-13 | 002 | reviewer-2 (security fixes) | Opus | 97,507 | isolated Tier-A adversarial review of R9/R10/R12/R15 fixes; 2 major (F1, F2) + 4 minor, executed probes |
 | 2026-07-13 | 002 | delivery-pm | Sonnet | ~90,000 (est.) | wrap: 99-status.md + manifest v0.2.0 + build-log + dev-cost; not precisely self-metered, estimated from context volume (read 5 large docs incl. 70-threats.md + both reviews) |
 | 2026-07-13 | 002 | **TOTAL** | — | **~1,396,000** | 11 subagents (10 metered + 1 estimated); orchestrator tokens not included |
+| 2026-07-13 | 003 | kickoff | Haiku | 30,697 | brief + roadmap flip |
+| 2026-07-13 | 003 | prod-ba | Sonnet | 49,474 | 8 stories, ACs + PRD; scope confirmed (007 fields neutralized, not faked) |
+| 2026-07-13 | 003 | architecture | Opus | 57,010 | confirmed ADR-001/ADR-002 hold unchanged; no new ADR; approach note only |
+| 2026-07-13 | 003 | engineering | Sonnet | 111,120 | full `src/index.html` rewrite (Pick+Result, 5-state machine) + upload.test.js shape-assertion extension; 73 tests green |
+| 2026-07-13 | 003 | ux-design | Sonnet | 88,795 | fidelity check vs. handoff tokens; fixed a real AA contrast fail + a border-token mismatch; added prefers-reduced-motion guard |
+| 2026-07-13 | 003 | reviewer | Opus | 76,306 | isolated Tier-A review; 0 major, 1 minor (F1 no client timeout) + 2 nits |
+| 2026-07-13 | 003 | qa | Haiku | 48,415 | risk-driven test cases; 24-case Playwright tier specified, not implemented this run |
+| 2026-07-13 | 003 | delivery-pm | Sonnet | ~55,000 (est.) | wrap: 99-status.md + manifest v0.3.0 + build-log + dev-cost; not precisely self-metered, estimated from context volume (read the full feature folder incl. 55-review.md + 60-test-cases.md + 40-design-changes.md) |
+| 2026-07-13 | 003 | **TOTAL** | — | **~516,800** | 8 subagents (7 metered + 1 estimated); orchestrator tokens not included |
+
+**Running comparison across features:** 001 ≈235k tokens (8 subagents, new service from scratch) →
+002 ≈1.40M tokens (11 subagents, vision-model integration + 2 rounds of security-driven fixes/re-review
+— by far the most expensive feature so far) → 003 ≈517k tokens (8 subagents, frontend-only visual
+rebuild — roughly a third of 002's cost, consistent with "no server/API change, no new ADR, single
+review pass with 0 majors").
