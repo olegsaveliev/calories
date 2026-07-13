@@ -28,7 +28,8 @@ const MODEL = "claude-sonnet-5";
 // reserved for the answer, so hitting max_tokens here means truncated JSON -> parse failure ->
 // FALSE fail-closed on a perfectly good photo (30-design.md §2 "Build flag"). 1024 leaves generous
 // headroom (a food_name would need to run past ~800+ chars of JSON-escaped text to threaten it,
-// far beyond MAX_FOOD_NAME_LENGTH) while staying well inside the existing test's `<= 1024` bound.
+// far beyond MAX_FOOD_NAME_LENGTH). NOTE: this bound is not currently covered by a test (review
+// F3, accepted & logged) — verify it if the schema or field bounds grow.
 const MAX_TOKENS = 1024;
 const REQUEST_TIMEOUT_MS = 30_000; // AI Eval Card latency ceiling (30-design.md decision 4)
 

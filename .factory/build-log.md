@@ -3,6 +3,56 @@
 > One entry per delivered feature / fixed bug, newest at the top. Written by `delivery-pm` (wrap) and
 > `bugfix`. This is the narrative history; `manifest.md` is the current state.
 
+## 2026-07-13 — 007 Food ID + confidence (v0.4.0)
+- Wired the three Result-screen fields feature 003 left neutral (food-name pill, "items seen" tile,
+  "confidence" tile) by expanding the existing single `claude-sonnet-5` vision call's structured-output
+  schema from `{food_identified, calories}` to `{food_identified, calories, food_name, confidence,
+  items_count}` — **same call, no second round-trip, no new model tier, no new runtime dependency**
+  (ADR-001/ADR-002 both hold, AC1.3 confirmed via test). `POST /upload`'s `calorieResult` gains three
+  OPTIONAL fields (`foodName?`/`confidence?`/`itemsCount?`) present only on `status:"estimated"` and
+  omitted (never `null`) when a field fails validation — a fully-degraded response is byte-identical
+  to the pre-007 shape, so the contract change is backward compatible (no ADR needed, additive,
+  follows the 002 precedent).
+- **Untrusted-text handling (`foodName` is the first model-generated free text this app has ever
+  surfaced):** validated server-side in `src/vision.js`, reject-to-neutral — never truncated/rewritten
+  — on over-length (>60 chars, `MAX_FOOD_NAME_LENGTH`), empty/whitespace, non-string, or any C0/C1
+  control, zero-width, or bidi-override code point; rendered via `element.textContent` only, never
+  `innerHTML`. `confidence` constrained to a closed enum (schema-level + JS re-check); off-enum omits.
+  `itemsCount` bounded `[0,50]`; out-of-range omits. Each field degrades independently — a bad name/
+  confidence/count never flips a good calorie estimate to `no_food`/`unavailable`. `render()` resets
+  all three to neutral unconditionally before every branch, so no stale value survives across
+  estimating/error/no_food/Try-again/New-photo.
+- `MAX_TOKENS` raised 256→1024 (the enlarged 5-field JSON reply could otherwise truncate mid-object
+  under `thinking:disabled` and falsely fail-closed a valid photo); no material cost change, but
+  modestly widens the per-call ceiling of the carried High cost-DoS risk R9 (rate-limit unchanged).
+- Review: **PASS**, Tier A (independent, fresh subagent), 0 major. Findings dispositioned by the
+  human: **F1+F2** (incomplete bidi-isolate/ALM/line-separator reject-set in `FOOD_NAME_DISALLOWED_RE`
+  — bounded to visual deception in the 60-char pill, no XSS) **DEFERRED to follow-up roadmap 009**;
+  **F3** (the `MAX_TOKENS` bump has no test assertion, and the build notes incorrectly claimed one
+  exists — build notes corrected at wrap) **+ F4** (the new pill/tile render path is untested by
+  anything that drives a browser) **+ F5** (client-side re-check nit) **ACCEPTED & logged**.
+- QA: 51 risk-driven test cases (34 explicit negatives), all passing against the live app; recommends
+  a 3–5 flow Playwright browser-E2E tier for the new render paths. **Human release call: SHIP NOW; the
+  Playwright work stays folded into the existing roadmap 008 item** (the 007 new-field render cases
+  are noted as belonging there, not a separate item).
+- Threat-model (human ACCEPTED & LOGGED, localhost-prototype gate unchanged): **R18 (High)** — the
+  confidence badge is the model's self-reported, uncalibrated confidence; a confidently-wrong estimate
+  or a clean-but-wrong dish name can amplify overreliance rather than calibrate it (evolves carried
+  002-R14). **R16 (Med)** — prompt injection can now place attacker-chosen readable text on screen,
+  contained today (schema + validators + `textContent`, self-targeting); explicit pre-condition flag
+  for roadmap 006 (shareable card) — showing one user's dish-name text to another re-scores R16 High.
+  **R17 (Low)** — the deferred bidi/separator gap (F1/F2), human-deferred to roadmap 009. **R19
+  (Low)** — the `MAX_TOKENS` raise, ties to carried R9. Carried 002 escalations (R9, R1, R10) unchanged.
+- Tests: 95 passing (up from 74; all prior 001/002/003 assertions preserved except the one 003
+  negative assertion the design doc flagged as expected-to-change). Lint clean.
+- Note: the dev `ANTHROPIC_API_KEY` now has credit — the human confirmed a live happy-path run today
+  (a real photo returned "95 calories"). Reminder that the dev server must be restarted to pick up
+  server/vision code changes (Node caches ES module imports; only `index.html` is re-read per request).
+- Follow-ups queued for the orchestrator: roadmap **009** (dish-name spoofing-char hardening — F1/F2/
+  R17) and an expanded scope on existing roadmap **008** (Playwright E2E, now including the 007 render
+  paths).
+- PR/commit: not created by this wrap step (orchestrator-owned) · Issue: (roadmap 007)
+
 ## 2026-07-13 — BUG-001 Dropzone icon + label centering (bugfix)
 - Pick-screen dropzone: the camera icon sat left of centre and "Add a photo" wasn't stacked under it.
 - Root cause: `#dropzone-empty` (holding the icon + labels) had no layout rule, so it was a plain block

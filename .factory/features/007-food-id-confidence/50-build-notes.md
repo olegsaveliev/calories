@@ -34,7 +34,13 @@ Result-screen wiring). No new ADR, no new dependency, no new model, no server/tr
   - **`MAX_TOKENS` raised from 256 to 1024.** The enlarged JSON object (5 fields vs. 2) plus an
     unbounded-by-schema `food_name` could plausibly approach 256 tokens; since `thinking` is
     disabled, hitting `max_tokens` mid-JSON would parse-fail and *falsely* fail-closed a valid photo.
-    1024 leaves generous headroom while staying within the existing test's `<= 1024` assertion.
+    1024 leaves generous headroom. **Correction (review F3):** an earlier version of this note
+    claimed the bump stayed "within the existing test's `<= 1024` assertion" — **no such assertion
+    exists**. `grep` across `tests/` confirms there is no test that asserts anything about
+    `max_tokens`'s value or bound. The 1024 figure is unguarded against future regression; review
+    recommends adding a one-line request-shape assertion (e.g. `JSON.parse(init.body).max_tokens` is
+    a sane bound) rather than relying on this prose. Not fixed this run (see `55-review.md` F3,
+    `99-status.md`).
 
 - **`src/server.js`**
   - `calorieResult` construction for the `"estimated"` branch now spreads `foodName`/`confidence`/
