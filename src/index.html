@@ -4,12 +4,68 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Calories</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
+    .controls { display: flex; gap: .5rem; align-items: center; margin: 1rem 0; flex-wrap: wrap; }
+    #status { margin-top: 1rem; min-height: 1.5rem; }
+    #status.ok { color: #0a7d28; }
+    #status.err { color: #b00020; }
+    button { padding: .4rem .8rem; }
+  </style>
 </head>
 <body>
-  <!-- Starter placeholder. Your first feature (via /factory-run 001) replaces this. -->
   <main id="app">
     <h1 data-testid="title">Calories</h1>
-    <p>Factory template ready. Run <code>/setup</code>, then build your first feature.</p>
+    <p>Pick a food photo and send it to the service.</p>
+
+    <div class="controls">
+      <!-- AC1.1 — visible file input that accepts images + a control to send it -->
+      <input type="file" accept="image/*" data-testid="file-input" />
+      <button type="button" data-testid="send-button">Send photo</button>
+    </div>
+
+    <!-- AC1.3 — visible confirmation area (rendered with textContent, never innerHTML) -->
+    <div id="status" data-testid="status" role="status" aria-live="polite"></div>
   </main>
+
+  <script>
+    const fileInput = document.querySelector('[data-testid="file-input"]');
+    const sendButton = document.querySelector('[data-testid="send-button"]');
+    const status = document.querySelector('[data-testid="status"]');
+
+    function setStatus(text, ok) {
+      status.textContent = text;              // textContent only — no innerHTML
+      status.className = ok ? 'ok' : 'err';
+    }
+
+    sendButton.addEventListener('click', async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) {
+        setStatus('Please choose an image first.', false);
+        return;
+      }
+
+      setStatus('Uploading…', true);
+      try {
+        // ADR-002 — send the File as the raw request body; MIME in Content-Type.
+        const res = await fetch('/upload', {
+          method: 'POST',
+          body: file,
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        });
+        let data = {};
+        try { data = await res.json(); } catch { /* non-JSON body */ }
+
+        if (res.ok && data.ok) {
+          // AC1.3 — visible confirmation with the received file info.
+          setStatus(`Photo received: ${data.size} bytes, ${data.type}.`, true);
+        } else {
+          setStatus(`Upload rejected: ${data.error || res.status}.`, false);
+        }
+      } catch {
+        setStatus('Network error — could not reach the server.', false);
+      }
+    });
+  </script>
 </body>
 </html>

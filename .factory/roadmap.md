@@ -6,7 +6,7 @@
 
 | ID  | Feature | One-liner | Size | Status | Blocked by |
 |-----|---------|-----------|------|--------|-----------|
-| 001 | Initial prototype | Upload a picture of food. | S | queued | — |
+| 001 | Initial prototype | Upload a picture of food. | S | in progress | — |
 
 ## GitHub Issues (mirror — see `.factory/github.md`)
 Repo: `olegsaveliev/calories` · main is **protected** (PR + green CI to merge).
